@@ -444,6 +444,9 @@ pub struct ActionStep {
     /// 「发送文本」：用剪贴板粘贴（`None` = 直接注入）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text_paste: Option<bool>,
+    /// 剪贴板粘贴后等多少毫秒再还原（`None` = 220）。大项目里粘贴慢就调大
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paste_wait_ms: Option<u32>,
 }
 
 impl Default for ActionStep {
@@ -455,6 +458,7 @@ impl Default for ActionStep {
             params: std::collections::BTreeMap::new(),
             text_escapes: None,
             text_paste: None,
+            paste_wait_ms: None,
         }
     }
 }
@@ -468,6 +472,7 @@ impl ActionStep {
             params: std::collections::BTreeMap::new(),
             text_escapes: None,
             text_paste: None,
+            paste_wait_ms: None,
         }
     }
 
@@ -484,6 +489,7 @@ impl ActionStep {
             params,
             text_escapes: None,
             text_paste: None,
+            paste_wait_ms: None,
         }
     }
 

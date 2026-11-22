@@ -1508,6 +1508,109 @@ mod imp {
     ///   `{Ctrl+S}` 这类 → 当成按键按一下
     /// - `{{` → 一个字面的 `{`；`}}` → 一个字面的 `}`
     /// - 认不出来的 `{xxx}` **原样保留**（宁可打出大括号，也不能把内容吃掉）
+    /// 剪贴板全量快照（AHK 的 `ClipboardAll`）。
+    pub struct ClipboardSnapshot {
+        /// (格式, 原始字节) —— 只收 HGLOBAL 类格式
+        pub blocks: Vec<(u32, Vec<u8>)>,
+        /// CF_BITMAP 是 GDI 位图句柄，不是 HGLOBAL，单独复制一份留着
+        pub bitmap: Option<isize>,
+    }
+
+    /// 把剪贴板里**所有格式**都存下来（图片、RTF、HTML、自定义格式都在内）。
+    ///
+    /// AHK 的 `ClipboardAll` 就是干这个的：临时用一下剪贴板，用完原样还回去，
+    /// 不该把用户的图片/富文本弄没。
+    ///
+    /// 存不了的几类：延迟渲染格式（0x0080~0x00FF，句柄为空）、
+    /// 增强图元（CF_ENHMETAFILE）、调色板（CF_PALETTE）、图元（CF_METAFILEPICT）——
+    /// 它们不是普通内存块，强行拷会拷出错的东西，宁可跳过。
+    pub fn clipboard_snapshot() -> Option<ClipboardSnapshot> {
+        use windows_sys::Win32::System::DataExchange::{
+            EnumClipboardFormats, GetClipboardData,
+        };
+        use windows_sys::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{CopyImage, IMAGE_BITMAP};
+        const CF_BITMAP: u32 = 2;
+        const CF_METAFILEPICT: u32 = 3;
+        const CF_PALETTE: u32 = 9;
+        const CF_ENHMETAFILE: u32 = 14;
+        unsafe {
+            if !open_clipboard() {
+                return None;
+            }
+            let mut blocks: Vec<(u32, Vec<u8>)> = Vec::new();
+            let mut bitmap: Option<isize> = None;
+            let mut format = 0u32;
+            loop {
+                format = EnumClipboardFormats(format);
+                if format == 0 {
+                    break;
+                }
+                if (0x0080..=0x00FF).contains(&format) {
+                    continue; // 延迟渲染 / 私有格式，没有实体数据
+                }
+                let handle = GetClipboardData(format);
+                if handle.is_null() {
+                    continue;
+                }
+                if format == CF_BITMAP {
+                    let copy = CopyImage(handle, IMAGE_BITMAP, 0, 0, 0);
+                    if !copy.is_null() {
+                        bitmap = Some(copy as isize);
+                    }
+                    continue;
+                }
+                if format == CF_METAFILEPICT || format == CF_PALETTE || format == CF_ENHMETAFILE {
+                    continue;
+                }
+                let size = GlobalSize(handle);
+                if size == 0 {
+                    continue;
+                }
+                let pointer = GlobalLock(handle) as *const u8;
+                if pointer.is_null() {
+                    continue;
+                }
+                let bytes = std::slice::from_raw_parts(pointer, size).to_vec();
+                GlobalUnlock(handle);
+                blocks.push((format, bytes));
+            }
+            CloseClipboard();
+            Some(ClipboardSnapshot { blocks, bitmap })
+        }
+    }
+
+    /// 把快照原样放回剪贴板（快照被消费：里面的 GDI 句柄交给剪贴板了）。
+    pub fn clipboard_restore(snapshot: ClipboardSnapshot) {
+        use windows_sys::Win32::System::Memory::{
+            GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
+        };
+        const CF_BITMAP: u32 = 2;
+        unsafe {
+            if !open_clipboard() {
+                return;
+            }
+            EmptyClipboard();
+            for (format, bytes) in snapshot.blocks {
+                let memory = GlobalAlloc(GMEM_MOVEABLE, bytes.len());
+                if memory.is_null() {
+                    continue;
+                }
+                let pointer = GlobalLock(memory) as *mut u8;
+                if pointer.is_null() {
+                    continue;
+                }
+                std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
+                GlobalUnlock(memory);
+                SetClipboardData(format, memory as HANDLE);
+            }
+            if let Some(bitmap) = snapshot.bitmap {
+                SetClipboardData(CF_BITMAP, bitmap as HANDLE);
+            }
+            CloseClipboard();
+        }
+    }
+
     /// 用剪贴板粘贴：写剪贴板 → `Ctrl+V` → 等它粘完 → **还原原来的剪贴板**。
     ///
     /// 为什么不直接用 `send_text`：终端、部分 Electron 应用（VS Code 终端、
@@ -1515,16 +1618,32 @@ mod imp {
     ///
     /// 还原只做到「文本」这一层：原来剪贴板里是图片 / 文件的话还原不回去
     /// （只能清空），这一点在设置页的提示里写清楚了。
-    pub fn paste_text(text: &str) -> Result<(), String> {
-        let previous = read_clipboard_text();
-        write_clipboard_text(text);
-        // 剪贴板写入也是异步生效的，等它稳一下再按 Ctrl+V
-        std::thread::sleep(std::time::Duration::from_millis(25));
+    pub fn paste_text(text: &str, wait_ms: u64) -> Result<(), String> {
+        // 先整份备份（文本、图片、RTF、自定义格式全在），用完原样还回去
+        let snapshot = clipboard_snapshot();
+        // 写进去之后**读回核对**：剪贴板可能被别的程序锁着，写失败的话
+        // 直接按 Ctrl+V 只会粘出一片空白（实测踩过）。写不成就退回直接注入。
+        let mut written = false;
+        for _ in 0..5 {
+            write_clipboard_text(text);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            if read_clipboard_text().as_deref() == Some(text) {
+                written = true;
+                break;
+            }
+        }
+        if !written {
+            if let Some(snapshot) = snapshot {
+                clipboard_restore(snapshot);
+            }
+            return send_text(text);
+        }
         let sent = send_keys("Ctrl+V");
-        // 给目标程序留出真正粘贴的时间，然后还原，别污染用户的剪贴板
-        std::thread::sleep(std::time::Duration::from_millis(220));
-        match previous {
-            Some(old) => write_clipboard_text(&old),
+        // 给目标程序留出真正粘贴的时间（每条动作可以自己配），然后还原
+        std::thread::sleep(std::time::Duration::from_millis(wait_ms.clamp(30, 3000)));
+        match snapshot {
+            Some(snapshot) => clipboard_restore(snapshot),
+            // 备份失败（剪贴板被别人锁着）：至少别把自己的内容留在里面
             None => write_clipboard_text(""),
         }
         sent
@@ -3671,7 +3790,7 @@ pub use imp::{
     process_ids, top_windows, activate_or_minimize, close_window, launch_as, split_command,
     monitor_off, empty_recycle_bin, ahk_from_registry,
     make_click_through, set_click_through,
-    resize_window, fit_client_size, ime_composition_len, send_text_with_keys, paste_text,
+    resize_window, fit_client_size, ime_composition_len, send_text_with_keys, paste_text, clipboard_snapshot, clipboard_restore,
     work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
     cancel_ime_composition, cancel_ime_composition_in, place_ime_in,
@@ -4153,7 +4272,7 @@ pub fn send_text_with_keys(text: &str) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-pub fn paste_text(_text: &str) -> Result<(), String> {
+pub fn paste_text(_text: &str, _wait_ms: u64) -> Result<(), String> {
     Err("只有 Windows 支持".to_string())
 }
 

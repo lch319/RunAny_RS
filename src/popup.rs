@@ -1236,7 +1236,7 @@ fn execute_step(cx: &mut App, step: &ActionStep, append_selection: bool) -> Resu
             let paste = step.text_paste.unwrap_or(false);
             if paste {
                 // 剪贴板粘贴：稳，能进长文本；执行完会把剪贴板还原
-                win32::paste_text(value)
+                win32::paste_text(value, step.paste_wait_ms.unwrap_or(220) as u64)
             } else if escapes {
                 // 认识 `{Enter}` `{Tab}` `{Backspace}` 这类记号（`{{` 打一个大括号）
                 win32::send_text_with_keys(value)

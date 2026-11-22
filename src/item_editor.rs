@@ -276,6 +276,8 @@ pub struct ItemEditor {
     script_areas: std::collections::HashMap<usize, Entity<crate::text_area::TextArea>>,
     /// 「发送文本 + 剪贴板粘贴」的**多行**输入框（按动作下标）
     paste_areas: std::collections::HashMap<usize, Entity<crate::text_area::TextArea>>,
+    /// 「粘贴后等多久再还原剪贴板」（毫秒，按动作下标；留空 = 220）
+    paste_waits: std::collections::HashMap<usize, Entity<TextInput>>,
     /// 正在给第几条动作挑「内置动作」（动作库列表是展开还是收起）
     picker_for: Option<usize>,
     /// 第几条动作展开了「多媒体键」那片按钮（同一时间只开一片）
@@ -563,6 +565,7 @@ impl ItemEditor {
             param_inputs: std::collections::HashMap::new(),
             script_areas: std::collections::HashMap::new(),
             paste_areas: std::collections::HashMap::new(),
+            paste_waits: std::collections::HashMap::new(),
             picker_for: None,
             media_open: None,
             autofill_open,
@@ -708,6 +711,7 @@ impl ItemEditor {
         self.param_inputs.clear();
         self.script_areas.clear();
         self.paste_areas.clear();
+        self.paste_waits.clear();
         let mut extra_subs: Vec<Subscription> = Vec::new();
         for (index, action) in actions.iter().enumerate() {
             let value =
@@ -734,6 +738,29 @@ impl ItemEditor {
                     view.set_action_value(index_now, text, cx);
                 }));
                 self.paste_areas.insert(index, area);
+
+                let wait = cx.new(|cx| {
+                    TextInput::new(
+                        action
+                            .paste_wait_ms
+                            .map(|ms| ms.to_string())
+                            .unwrap_or_default(),
+                        "220",
+                        11.5,
+                        cx,
+                    )
+                });
+                let seen: Rc<Cell<Option<String>>> = Rc::new(Cell::new(None));
+                let entity = wait.clone();
+                let index_now = index;
+                extra_subs.push(cx.observe(&entity, move |view, input, cx| {
+                    let text = input.read(cx).text();
+                    if seen.replace(Some(text.clone())).as_deref() == Some(text.as_str()) {
+                        return;
+                    }
+                    view.set_paste_wait(index_now, text, cx);
+                }));
+                self.paste_waits.insert(index, wait);
             }
             let delay = cx.new(|cx| {
                 TextInput::new(
@@ -879,6 +906,19 @@ impl ItemEditor {
         if matches!(kind, FlagKind::Paste) {
             self.rows_key = (String::new(), usize::MAX);
         }
+    }
+
+    /// 「粘贴后等多少毫秒再还原剪贴板」；清空 = 回到默认 220。
+    fn set_paste_wait(&mut self, index: usize, text: String, cx: &mut App) {
+        let parsed = text.trim().parse::<u32>().ok().filter(|ms| *ms > 0);
+        self.apply_field(
+            move |item| {
+                if let Some(step) = item.actions.get_mut(index) {
+                    step.paste_wait_ms = parsed;
+                }
+            },
+            cx,
+        );
     }
 
     fn set_action_value(&mut self, index: usize, text: String, cx: &mut App) {
@@ -4211,6 +4251,32 @@ impl ItemEditor {
                             cx.notify();
                         }),
                     ))
+                    .when(paste, |row| {
+                        let input = self.paste_waits.get(&index).cloned();
+                        match input {
+                            Some(input) => row
+                                .child(
+                                    div()
+                                        .w(px(58.))
+                                        .h(px(22.))
+                                        .px(px(6.))
+                                        .flex()
+                                        .items_center()
+                                        .rounded(px(6.))
+                                        .bg(theme::surface_sunken())
+                                        .border_1()
+                                        .border_color(theme::border_strong())
+                                        .child(input),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(9.5))
+                                        .text_color(theme::ui_text_tertiary())
+                                        .child(crate::i18n::t("ms 后还原剪贴板")),
+                                ),
+                            None => row,
+                        }
+                    })
                     .child(
                         div()
                             .flex_1()
