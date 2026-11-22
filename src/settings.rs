@@ -438,6 +438,12 @@ pub struct ActionStep {
     /// 拼进字符串以后改一个参数就得解析一次，加参数还得保证旧值不串位。
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub params: std::collections::BTreeMap<String, String>,
+    /// 「发送文本」：认不认 `{Enter}` `{Tab}` 这类按键记号（`None` = 认）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_escapes: Option<bool>,
+    /// 「发送文本」：用剪贴板粘贴（`None` = 直接注入）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_paste: Option<bool>,
 }
 
 impl Default for ActionStep {
@@ -447,6 +453,8 @@ impl Default for ActionStep {
             value: String::new(),
             delay_ms: 0,
             params: std::collections::BTreeMap::new(),
+            text_escapes: None,
+            text_paste: None,
         }
     }
 }
@@ -458,6 +466,8 @@ impl ActionStep {
             value: value.into(),
             delay_ms: 0,
             params: std::collections::BTreeMap::new(),
+            text_escapes: None,
+            text_paste: None,
         }
     }
 
@@ -472,6 +482,8 @@ impl ActionStep {
             value: value.into(),
             delay_ms: 0,
             params,
+            text_escapes: None,
+            text_paste: None,
         }
     }
 
@@ -1384,18 +1396,6 @@ pub struct MenuSettings {
     /// 局部优先级高于这里）
     #[serde(default)]
     pub append_selection: bool,
-    /// 「发送文本」认识 `{Enter}` `{Tab}` `{Backspace}` 这类按键记号（默认开）。
-    ///
-    /// 关掉之后 `{Enter}` 就真的打成「{Enter}」这六个字符 —— 有些人要发代码片段、
-    /// 模板文本，里面的花括号不该被吃掉。
-    #[serde(default = "default_true")]
-    pub send_text_escapes: bool,
-    /// 「发送文本」改成**剪贴板粘贴**（默认关）。
-    ///
-    /// 直接注入在某些程序里会被拦（终端、部分 Electron 应用、输入法），
-    /// 走剪贴板粘一次最稳。执行时会备份、粘贴、再把原来的剪贴板还原。
-    #[serde(default)]
-    pub send_text_paste: bool,
     /// 多选文件时，「这几项要求的后缀」怎么算命中
     pub multi_file_rule: MultiFileRule,
     /// 「把选中的文件加到菜单里」时路径写成什么样（每次问 / 总是完整 / 总是裸名）
@@ -2080,8 +2080,6 @@ impl MenuSettings {
             selection_wait_ms: 500,
             context_filter: true,
             append_selection: true,
-            send_text_escapes: true,
-            send_text_paste: false,
             multi_file_rule: MultiFileRule::AllSame,
             add_selection_path: crate::selection::AddSelectionPath::default(),
             popup_hotkey: DEFAULT_POPUP_HOTKEY.to_string(),

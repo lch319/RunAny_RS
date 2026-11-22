@@ -1231,9 +1231,9 @@ fn execute_step(cx: &mut App, step: &ActionStep, append_selection: bool) -> Resu
             if value.is_empty() {
                 return Ok(());
             }
-            let (paste, escapes) = settings::read(|settings| {
-                (settings.send_text_paste, settings.send_text_escapes)
-            });
+            // 每条动作自己记这两个开关（`None` = 默认：认记号、不用粘贴）
+            let escapes = step.text_escapes.unwrap_or(true);
+            let paste = step.text_paste.unwrap_or(false);
             if paste {
                 // 剪贴板粘贴：稳，能进长文本；执行完会把剪贴板还原
                 win32::paste_text(value)

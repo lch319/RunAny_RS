@@ -207,6 +207,49 @@ struct RunPanel {
     keys: Entity<TextInput>,
 }
 
+/// 「发送文本」动作上的两个开关（每条动作独立）。
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FlagKind {
+    /// 认不认 `{Enter}` 这类记号
+    Escapes,
+    /// 用不用剪贴板粘贴
+    Paste,
+}
+
+/// 一个「开着 / 关着」的小按钮（点一下翻转）。
+fn flag_button(
+    id: impl Into<gpui::SharedString>,
+    label: impl Into<gpui::SharedString>,
+    on: bool,
+    on_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    let (bg, fg, border) = if on {
+        (theme::accent_soft(), theme::accent(), theme::accent())
+    } else {
+        (
+            theme::surface_sunken(),
+            theme::ui_text_tertiary(),
+            theme::border_strong(),
+        )
+    };
+    div()
+        .id(id.into())
+        .h(px(22.))
+        .px(px(8.))
+        .flex()
+        .items_center()
+        .rounded(px(6.))
+        .bg(bg)
+        .border_1()
+        .border_color(border)
+        .cursor_pointer()
+        .text_size(px(10.))
+        .text_color(fg)
+        .child(label.into())
+        .on_click(on_click)
+        .into_any_element()
+}
+
 pub struct ItemEditor {
     id: String,
     /// 第几条动作在改「运行选项」（None = 面板没开）
@@ -231,6 +274,8 @@ pub struct ItemEditor {
     param_inputs: std::collections::HashMap<(usize, String), Entity<TextInput>>,
     /// 脚本动作的多行编辑框（按动作下标）
     script_areas: std::collections::HashMap<usize, Entity<crate::text_area::TextArea>>,
+    /// 「发送文本 + 剪贴板粘贴」的**多行**输入框（按动作下标）
+    paste_areas: std::collections::HashMap<usize, Entity<crate::text_area::TextArea>>,
     /// 正在给第几条动作挑「内置动作」（动作库列表是展开还是收起）
     picker_for: Option<usize>,
     /// 第几条动作展开了「多媒体键」那片按钮（同一时间只开一片）
@@ -517,6 +562,7 @@ impl ItemEditor {
             rows_key: (String::new(), usize::MAX),
             param_inputs: std::collections::HashMap::new(),
             script_areas: std::collections::HashMap::new(),
+            paste_areas: std::collections::HashMap::new(),
             picker_for: None,
             media_open: None,
             autofill_open,
@@ -661,10 +707,34 @@ impl ItemEditor {
         self.rows.clear();
         self.param_inputs.clear();
         self.script_areas.clear();
+        self.paste_areas.clear();
         let mut extra_subs: Vec<Subscription> = Vec::new();
         for (index, action) in actions.iter().enumerate() {
             let value =
                 cx.new(|cx| TextInput::new(action.value.clone(), action.kind.hint(), 11.5, cx));
+            // 粘贴模式的「发送文本」用多行框：一段话经常是好几行
+            if action.kind == ActionKind::Text && action.text_paste == Some(true) {
+                let area = cx.new(|cx| {
+                    crate::text_area::TextArea::new(
+                        action.value.clone(),
+                        crate::i18n::t("要发送的内容（可以多行）"),
+                        11.5,
+                        cx,
+                    )
+                    .with_min_rows(6)
+                });
+                let seen: Rc<Cell<Option<String>>> = Rc::new(Cell::new(None));
+                let entity = area.clone();
+                let index_now = index;
+                extra_subs.push(cx.observe(&entity, move |view, area, cx| {
+                    let text = area.read(cx).text();
+                    if seen.replace(Some(text.clone())).as_deref() == Some(text.as_str()) {
+                        return;
+                    }
+                    view.set_action_value(index_now, text, cx);
+                }));
+                self.paste_areas.insert(index, area);
+            }
             let delay = cx.new(|cx| {
                 TextInput::new(
                     if action.delay_ms == 0 {
@@ -790,6 +860,25 @@ impl ItemEditor {
         self.rows_key = (String::new(), usize::MAX);
         self.sync_rows(cx);
         cx.notify();
+    }
+
+    /// 「发送文本」那一行两个开关是哪种。
+    fn set_action_flag(&mut self, index: usize, kind: FlagKind, value: Option<bool>, cx: &mut App) {
+        self.apply_field(
+            move |item| {
+                if let Some(step) = item.actions.get_mut(index) {
+                    match kind {
+                        FlagKind::Escapes => step.text_escapes = value,
+                        FlagKind::Paste => step.text_paste = value,
+                    }
+                }
+            },
+            cx,
+        );
+        // 菜单里的动作链是「选中就执行」，改完立即按新设置重排输入框
+        if matches!(kind, FlagKind::Paste) {
+            self.rows_key = (String::new(), usize::MAX);
+        }
     }
 
     fn set_action_value(&mut self, index: usize, text: String, cx: &mut App) {
@@ -3922,7 +4011,16 @@ impl ItemEditor {
                 .flex()
                 .items_center()
                 .gap(px(6.))
-                .child(div().flex_1().min_w_0().child(text_box(&row.value, 0.)));
+                .child(match self.paste_areas.get(&index) {
+                    // 粘贴模式：多行编辑框（内容多的时候一屏看得完）
+                    Some(area) => div()
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(132.))
+                        .child(area.clone())
+                        .into_any_element(),
+                    None => div().flex_1().min_w_0().child(text_box(&row.value, 0.)).into_any_element(),
+                });
             // 「发送按键」给一个键盘面板：Win 键、左右修饰键、小键盘只能点出来
             if action.kind == ActionKind::Keys {
                 line = line.child(crate::keypad::open_button(
@@ -4058,6 +4156,72 @@ impl ItemEditor {
                                 crate::i18n::t("管理员运行、已在运行时怎么办、工作目录、窗口状态").to_string()
                             } else {
                                 summary
+                            }),
+                    ),
+            );
+        }
+        // 「发送文本」的两个开关：每条动作自己记（不像「运行程序」那样还要开面板）
+        if action.kind == ActionKind::Text {
+            let escapes = action.text_escapes.unwrap_or(true);
+            let paste = action.text_paste.unwrap_or(false);
+            block = block.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(flag_button(
+                        format!("action-escapes-{index}"),
+                        if escapes {
+                            crate::i18n::t("{Enter} 等记号：开")
+                        } else {
+                            crate::i18n::t("{Enter} 等记号：关")
+                        },
+                        escapes,
+                        cx.listener(move |this, _: &ClickEvent, window, cx| {
+                            let next = !settings::read(|settings| {
+                                settings
+                                    .item_by_id(&this.id)
+                                    .and_then(|item| item.actions.get(index))
+                                    .map(|step| step.text_escapes.unwrap_or(true))
+                                    .unwrap_or(true)
+                            });
+                            this.set_action_flag(index, FlagKind::Escapes, Some(next), cx);
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ))
+                    .child(flag_button(
+                        format!("action-paste-{index}"),
+                        if paste {
+                            crate::i18n::t("剪贴板粘贴：开")
+                        } else {
+                            crate::i18n::t("剪贴板粘贴：关")
+                        },
+                        paste,
+                        cx.listener(move |this, _: &ClickEvent, window, cx| {
+                            let next = !settings::read(|settings| {
+                                settings
+                                    .item_by_id(&this.id)
+                                    .and_then(|item| item.actions.get(index))
+                                    .map(|step| step.text_paste.unwrap_or(false))
+                                    .unwrap_or(false)
+                            });
+                            this.set_action_flag(index, FlagKind::Paste, Some(next), cx);
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(px(9.5))
+                            .text_color(theme::ui_text_tertiary())
+                            .child(if paste {
+                                crate::i18n::t("走剪贴板 Ctrl+V：先备份、粘完还原（原来若是图片/文件只能还原成空）").to_string()
+                            } else {
+                                crate::i18n::t("直接当键盘输入打出去").to_string()
                             }),
                     ),
             );
