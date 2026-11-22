@@ -755,12 +755,20 @@ fn on_key(key: RawKey) -> bool {
         trim_tail(&mut typed, 48);
         typed.clone()
     };
-    // 中文输入法正在组字的这一段：**默认不匹配**。
+    // 提示**永远**先给：以前把这段放在「组字中不匹配」的闸门后面，中文输入法
+    // 一开着就连提示框都看不见了，用户以为功能坏了（真报过）。
+    if !config.hide_hint {
+        let lines = hint_lines(&config, &prefix);
+        if !lines.is_empty() {
+            emit_hint(lines);
+        }
+    }
+    // 中文输入法正在组字：默认**照样匹配**，命中后先按 Esc 让输入法丢掉组字再展开
+    // （`fire_hit` 里走 `cleanup` 那条路，见 `run_hotstring`）。
     //
-    // AHK 也是这个行为。不这样的话会出现更难看的场面：组字还没上屏，
-    // 我们就把替换文本注进去，输入法把注入的字母又吸进候选 —— 屏幕上留下
-    // 「方彤」这种莫名其妙的东西（实测过）。宁可这一下不触发，也不能打出乱码。
-    // 想赌一把的可以在设置里打开「组字中也匹配」。
+    // 以前这里直接 `return false`，等于「中文输入法一开，热字符串全哑」——
+    // 用户实测「按了没反应、也不弹提示」就是它。想要 AHK 那种「组字中不动」的
+    // 行为，可以在设置里关掉「输入法组字时也匹配」。
     if composing() && !config.ime_match {
         if ime && is_letter {
             add_pending(1);
@@ -772,12 +780,6 @@ fn on_key(key: RawKey) -> bool {
     if let Some(rule) = auto_hit(&config, &prefix) {
         fire_hit(rule, None);
         return true;
-    }
-    if !config.hide_hint {
-        let lines = hint_lines(&config, &prefix);
-        if !lines.is_empty() {
-            emit_hint(lines);
-        }
     }
     // 这个键真的会落到目标程序里：记下它给屏幕加了几个字符
     if ime && is_letter {

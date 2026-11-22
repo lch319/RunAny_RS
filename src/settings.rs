@@ -1739,7 +1739,7 @@ pub struct HotstringSettings {
     pub case_sensitive: bool,
     /// 提示卡片上可以点：鼠标悬上去不消失，点哪条就直接执行哪一条
     pub hint_clickable: bool,
-    /// 输入法**组字中**也尝试匹配（默认关）
+    /// 输入法**组字中**也尝试匹配（默认开）
     ///
     /// 关着 = AHK 的行为：中文输入法正在组字时不触发、也不抢键。
     /// 开着 = 命中后先按一下 Esc 让输入法自己丢掉组字，再展开。
@@ -1748,10 +1748,9 @@ pub struct HotstringSettings {
     /// 拿到的 context 读不到组字（实测 `ImmGetCompositionString` 一直返回 0），
     /// 取消于是时灵时不灵。Esc 走正常输入通道，输入法一定认。
     ///
-    /// **默认关**：打开之后中文输入法下确实能用（实测 `ftw ` → `hello `），
-    /// 但和 `:B0:`（不删触发词）打架 —— 那条路会走进「取消组字」的清理流程，
-    /// 把触发词一起清掉。等两边理顺了再默认打开。
-    #[serde(default)]
+    /// **默认开**：中文输入法组字中也能用（命中后按 Esc 取消组字再展开）。
+    /// 想恢复 AHK 那种「组字中一个键都不抢」的行为就关掉它。
+    #[serde(default = "default_true")]
     pub ime_match: bool,
 }
 
@@ -1797,7 +1796,7 @@ impl Default for HotstringSettings {
             immediate: true,
             case_sensitive: false,
             hint_clickable: true,
-            ime_match: false,
+            ime_match: true,
         }
     }
 }
