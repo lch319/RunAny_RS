@@ -101,7 +101,6 @@
   "hint_y": 0,
   "end_chars": "-()[]{}:;'\"/\\,.?!",
   "anchor": "caret",
-  "immediate": true,
   "case_sensitive": false,
   "hint_clickable": true
  },

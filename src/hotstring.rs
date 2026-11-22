@@ -130,8 +130,6 @@ struct Config {
     hint_after: usize,
     hint_path_chars: usize,
     hide_hint: bool,
-    /// 敲完最后一个字符就执行，不用再按空格 / 回车（AHK 的 `:*:`）
-    immediate: bool,
     /// 输入法组字中也尝试匹配（默认关，见 `HotstringSettings::ime_match`）
     ime_match: bool,
 }
@@ -293,7 +291,6 @@ fn rebuild() -> (Config, bool) {
         hint_after: cfg.hint_after.clamp(1, 12) as usize,
         hint_path_chars: cfg.hint_path_chars as usize,
         hide_hint: cfg.hide_hint || !active,
-        immediate: cfg.immediate,
         ime_match: cfg.ime_match,
     };
     (config, active)
@@ -946,7 +943,6 @@ fn match_rule<'a>(config: &'a Config, typed: &str) -> Option<&'a Rule> {
 /// 三条里任一条成立就算：
 ///
 /// - 这一项自己勾了「一匹配就执行」（`now`）；
-/// - 全局「敲完就执行」开着（`immediate`，默认开）；
 /// - 短语里带数字 / 符号（`@win111` 这种）。中文输入法下敲 `@` 一定是想要那个
 ///   符号本身，不存在「拼音打到一半」的可能，所以这类短语敲完最后一个字符就该响，
 ///   不用再补一个空格 —— 用户在这儿多按一下，看起来就是「要多打一个 1」。
@@ -954,7 +950,6 @@ fn auto_hit<'a>(config: &'a Config, typed: &str) -> Option<&'a Rule> {
     match_rule(config, typed).filter(|rule| {
         rule.now
             || rule.no_end_char
-            || config.immediate
             || rule.text.chars().any(|ch| !ch.is_ascii_alphabetic())
     })
 }
@@ -1291,7 +1286,6 @@ mod tests {
             hint_path_chars: 10,
             ime_match: false,
             hide_hint: false,
-            immediate: false,
         }
     }
 

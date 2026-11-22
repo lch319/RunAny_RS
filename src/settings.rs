@@ -60,7 +60,7 @@ pub struct HotstringPhrase {
 }
 
 /// 收集热字符串（递归，跳过托盘那一支和禁用项）。
-fn collect_hotstrings(items: &[ItemSetting], global_now: bool, out: &mut Vec<HotstringPhrase>) {
+fn collect_hotstrings(items: &[ItemSetting], out: &mut Vec<HotstringPhrase>) {
     for item in items {
         if item.id == TRAY_ID || item.kind == ItemKind::Separator || !item.enabled {
             continue;
@@ -71,10 +71,10 @@ fn collect_hotstrings(items: &[ItemSetting], global_now: bool, out: &mut Vec<Hot
                 id: item.id.clone(),
                 label: item.label.clone(),
                 text: text.to_string(),
-                now: global_now || item.hotstring_now,
+                now: item.hotstring_now,
             });
         }
-        collect_hotstrings(&item.children, global_now, out);
+        collect_hotstrings(&item.children, out);
     }
 }
 
@@ -780,8 +780,9 @@ pub struct ItemSetting {    pub kind: ItemKind,
     pub hotstring: String,
     /// 这一项的热字符串「一匹配就执行，不等结束字符」（AHK 的 `*`）。
     ///
-    /// 和全局开关取或：任何一边开了就立刻执行。
-    #[serde(default, skip_serializing_if = "is_false")]
+    /// **默认开**：敲完最后一个字母立刻执行，不用再补空格 / 回车。
+    /// 全局那个开关已经删了（设置页不再有），只留这一处，免得两个开关打架。
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
     pub hotstring_now: bool,
     /// 这一条是「多列符」而不是普通分隔线：菜单在这里另起一列。
     ///
@@ -995,7 +996,9 @@ impl Default for ItemSetting {
             hotkey_local_when: String::new(),
             hotkey_when: String::new(),
             hotstring: String::new(),
-            hotstring_now: false,
+            // 默认「不等结束符」：敲完最后一个字母立刻执行（AHK 的 `:*:`）。
+            // 想回到「必须再按空格/回车」的，在编辑窗口里把这个按钮关掉。
+            hotstring_now: true,
             column_break: false,
             show_badges: None,
             show_shortcuts: None,
@@ -1731,10 +1734,6 @@ pub struct HotstringSettings {
     pub end_chars: String,
     /// 提示贴在哪儿：鼠标旁边 / 光标插入处
     pub anchor: HintAnchor,
-    /// 一匹配就执行：不等空格 / 回车 / 结束字符（AHK 的 `*` 选项）。
-    ///
-    /// 单项可以在编辑窗口里单独打开（`ItemSetting::hotstring_now`），两个开关取或。
-    pub immediate: bool,
     /// 区分大小写（默认不区分，和 AHK 一样）
     pub case_sensitive: bool,
     /// 提示卡片上可以点：鼠标悬上去不消失，点哪条就直接执行哪一条
@@ -1793,7 +1792,6 @@ impl Default for HotstringSettings {
             anchor: HintAnchor::default(),
             // 默认「敲完就执行」：AHK 那种非得再按一个空格才响的行为在中文输入法下
             // 会让人多按一个键（候选词已经把字符吃掉了），实际体验就是「不灵」。
-            immediate: true,
             case_sensitive: false,
             hint_clickable: true,
             ime_match: true,
@@ -2276,7 +2274,7 @@ impl MenuSettings {
     /// 所有配了热字符串的节点（按树的顺序，托盘那一支不算）。
     pub fn hotstring_phrases(&self) -> Vec<HotstringPhrase> {
         let mut out = Vec::new();
-        collect_hotstrings(&self.items, self.hotstrings.immediate, &mut out);
+        collect_hotstrings(&self.items, &mut out);
         out
     }
 
@@ -5908,12 +5906,10 @@ mod tests {
         assert_eq!(breaks, 1);
     }
 
-    /// 热字符串的「立刻执行」：全局开关或单项开关，任一开着就生效。
+    /// 「不等结束符」现在只有**单项**一个开关（全局那个已经从设置页删掉了）。
     #[test]
     fn hotstring_phrases_carry_the_instant_flag() {
         let mut settings = MenuSettings::default();
-        // 先关掉全局「敲完就执行」，这样断言的是「单项自己的开关」
-        settings.hotstrings.immediate = false;
         settings.items = vec![
             ItemSetting {
                 hotstring: "j@".to_string(),
@@ -5922,6 +5918,7 @@ mod tests {
             },
             ItemSetting {
                 hotstring: "ftw".to_string(),
+                hotstring_now: false,
                 ..ItemSetting::item("ftw", "Free the whales")
             },
         ];
@@ -5930,9 +5927,13 @@ mod tests {
         assert!(phrases[0].now);
         assert_eq!(phrases[0].label, "写邮件");
         assert!(!phrases[1].now);
-        // 全局开关打开 = 所有人都立刻执行
-        settings.hotstrings.immediate = true;
-        assert!(settings.hotstring_phrases().iter().all(|phrase| phrase.now));
+    }
+
+    /// 新建的菜单项默认「不等结束符」是**开**的。
+    #[test]
+    fn new_items_default_to_no_end_char() {
+        let item = ItemSetting::item("x", "随便");
+        assert!(item.hotstring_now);
     }
 
     #[test]

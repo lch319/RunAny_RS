@@ -7676,18 +7676,6 @@ impl SettingsView {
                             cx.notify();
                         }),
                     ),
-                    toggle_row(
-                        "一匹配就执行（不用结束符）",
-                        "AHK 的 * 选项：敲完最后一个字立刻执行，不用再补空格 / 回车。单项也可以自己开",
-                        cfg.immediate,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| {
-                                settings.hotstrings.immediate = !settings.hotstrings.immediate;
-                            });
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
                     info_row(
                         "中文输入法",
                         crate::i18n::t(
