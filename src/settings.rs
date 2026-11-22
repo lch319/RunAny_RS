@@ -2011,8 +2011,24 @@ fn default_opacity() -> f32 {
 fn default_max_panel_width() -> f32 {
     360.0
 }
-impl Default for MenuSettings {
-    fn default() -> Self {
+/// 打包在 exe 里的默认外观 / 快捷键（`assets/defaults/settings.json`）。
+const DEFAULT_SETTINGS: &str = include_str!("../assets/defaults/settings.json");
+
+/// 打包在 exe 里的默认菜单（`assets/defaults/menu.runa`）。
+const DEFAULT_MENU: &str = include_str!("../assets/defaults/menu.runa");
+
+/// 解析打包的默认菜单；解析不出来就返回 `None`（调用方退回代码里写死的那套）。
+fn bundled_menu() -> Option<(Vec<ItemSetting>, u32)> {
+    let file: crate::menu_files::ProfileFile = serde_json::from_str(DEFAULT_MENU).ok()?;
+    if file.items.is_empty() {
+        return None;
+    }
+    Some((file.items, file.next_id.max(1)))
+}
+
+impl MenuSettings {
+    /// 代码里写死的那套默认（打包的默认文件坏了时兜底用）。
+    fn default_from_code() -> Self {
         Self {
             theme_mode: ThemeMode::FollowSystem,
             light: theme::default_light(),
@@ -2068,6 +2084,41 @@ impl Default for MenuSettings {
             tray_menu: None,
         }
     }
+}
+
+impl Default for MenuSettings {
+    /// **只**是代码里写死的那套（用作兜底、也是单元测试的基线）。
+    ///
+    /// 打包的默认配置不在这里读：解析那份 54KB 的菜单会在测试线程的小栈上爆栈，
+    /// 而且 `Default` 应该是「最省事、最不会失败」的那个值。
+    /// 真正首次运行时用的是 [`bundled_default`]（见 `initial`）。
+    fn default() -> Self {
+        MenuSettings::default_from_code()
+    }
+}
+
+/// 首次运行时用的那份默认：打包在 exe 里的 `assets/defaults/settings.json` +
+/// `assets/defaults/menu.runa`。解析失败就退回 [`MenuSettings::default`]。
+pub fn bundled_default() -> MenuSettings {
+    let mut from_code = MenuSettings::default_from_code();
+    if let Some((items, next_id)) = bundled_menu() {
+        from_code.items = items;
+        from_code.next_id = next_id;
+    }
+    let Ok(mut bundled) = serde_json::from_str::<MenuSettings>(DEFAULT_SETTINGS) else {
+        return from_code;
+    };
+    bundled.items = from_code.items;
+    bundled.next_id = from_code.next_id;
+    // 托盘菜单**用打包那份里的**（作者的托盘也是配过的）；只有那份没有才用代码兜底
+    if bundled.tray_menu.is_none() {
+        bundled.tray_menu = from_code.tray_menu;
+    }
+    bundled.menu_profile = String::new();
+    bundled.pending_profile = None;
+    bundled.recent_items = Vec::new();
+    bundled.tray_icon = String::new();
+    bundled
 }
 
 impl MenuSettings {
@@ -3090,10 +3141,16 @@ impl MenuSettings {
             .map(|pos| self.items.remove(pos))
             .or_else(|| self.tray_menu.take())
             .unwrap_or_else(tray_branch);
-        self.items = default_items();
-        self.items.retain(|item| item.id != TRAY_ID);
-        self.items.push(tray);
-        self.next_id = 1;
+        // 「还原默认菜单」还原成**打包在 exe 里的那套**（`assets/defaults/menu.runa`），
+        // 不是代码里写死的示例菜单 —— 用户点这个按钮就是想回到「刚装好时那样」。
+        let (mut items, next_id) = match bundled_menu() {
+            Some((items, next_id)) => (items, next_id),
+            None => (default_items(), 1),
+        };
+        items.retain(|item| item.id != TRAY_ID);
+        items.push(tray);
+        self.items = items;
+        self.next_id = next_id;
         self.bump_next_id();
         self.reassign_tray_ids();
         self.normalize_tree();
@@ -4909,7 +4966,10 @@ fn load() -> Option<MenuSettings> {
         // 用户在文件管理器里看到的还是光秃秃一个 exe，想改菜单都找不到文件。
         // 这里直接把默认菜单落成 `menus/默认.runa`（`hydrate_profile` 里会
         // `create_dir_all`），再顺手写一份 `settings.json`，从此以后文件就在那儿了。
-        let mut settings = MenuSettings::default();
+        //
+        // 用 `bundled_default()`：打包进 exe 的那套默认（作者调好的外观 / 快捷键 / 菜单），
+        // 不是代码里写死的那套示例。
+        let mut settings = bundled_default();
         hydrate_profile(&mut settings);
         save(&settings);
         return Some(settings);
@@ -6304,6 +6364,19 @@ mod tests {
         assert_eq!(settings.items[quit[0]].kind, ItemKind::Submenu);
         // 动作照样留着
         assert!(!settings.items[quit[0]].actions.is_empty());
+    }
+
+    #[test]
+    fn resetting_restores_the_bundled_default_menu() {
+        // 「还原默认菜单」要回到打包的那套（assets/defaults/menu.runa），
+        // 不是代码里写死的示例菜单 —— 后者只有 4 个顶层项
+        let mut settings = MenuSettings::default();
+        settings.reset_items();
+        let labels: Vec<&str> = settings.items.iter().map(|item| item.label.as_str()).collect();
+        assert!(
+            labels.contains(&"常用"),
+            "还原后没回到打包的默认菜单，实际顶层：{labels:?}"
+        );
     }
 
     #[test]

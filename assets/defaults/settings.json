@@ -1,0 +1,300 @@
+{
+ "theme_mode": "FollowSystem",
+ "light": {
+  "surface": "#ffffff",
+  "accent": "#2f6feb",
+  "selected": "",
+  "text": "",
+  "accel": "",
+  "muted": "",
+  "muted_ui": "",
+  "border": ""
+ },
+ "dark": {
+  "surface": "#181b21",
+  "accent": "#6e9bff",
+  "selected": "",
+  "text": "",
+  "accel": "",
+  "muted": "",
+  "muted_ui": "",
+  "border": ""
+ },
+ "panel_width": 210.0,
+ "panel_width_mode": "auto",
+ "panel_max_width": 254.0,
+ "row_height": 25.0,
+ "radius": 8.0,
+ "menu_border": true,
+ "ahk_v1": "",
+ "ahk_v2": "",
+ "submenu_anchor": "name",
+ "badge_size": 18.0,
+ "font_scale": 1.0,
+ "font_family": "",
+ "show_shortcuts": true,
+ "show_badges": true,
+ "show_separators": true,
+ "selection_enabled": true,
+ "selection_copy_keys": "Ctrl+C",
+ "selection_wait_ms": 500,
+ "context_filter": true,
+ "append_selection": true,
+ "multi_file_rule": "all-same",
+ "add_selection_path": "ask",
+ "popup_hotkey": "`",
+ "popup_hotkey_noselect": "",
+ "popup_hotkey_sided": true,
+ "popup_hotkey_noselect_sided": true,
+ "magic": {
+  "enabled": true,
+  "hotkey": "",
+  "sided": true,
+  "fallback_menu": true,
+  "rules": [
+   {
+    "id": "magic-8",
+    "kind": "url",
+    "pattern": "",
+    "target": "custom-7",
+    "multiline": false,
+    "enabled": true
+   }
+  ]
+ },
+ "opacity": 1.0,
+ "auto_icons": true,
+ "tray_enabled": true,
+ "tray_left_click": "popup-menu",
+ "show_all_entry": true,
+ "show_all_placement": "bottom",
+ "menu_search": "off",
+ "tooltip": {
+  "enabled": true,
+  "width": 448.0,
+  "align": "left",
+  "template": "{label}\n?{kind} · {children} 项\n?加速键  {accel}\n?触发键  {hotkey}\n?快捷键  {shortcut}\n?{hidden}\n{note}\n{actions}",
+  "show_actions": true,
+  "show_keys": true,
+  "show_note": true,
+  "show_meta": true,
+  "delay_ms": 450
+ },
+ "programs": {
+  "enabled": true,
+  "prefer": "Version",
+  "exclude": "",
+  "extensions": "bat;cmd;exe;msi;msp;msu;ps1;scr;vbs;lnk"
+ },
+ "everything": {
+  "exe": "",
+  "autostart": true
+ },
+ "hotstrings": {
+  "enabled": true,
+  "hide_hint": false,
+  "hint_after": 3,
+  "hint_path_chars": 10,
+  "hint_ms": 6000,
+  "hint_opacity": 90,
+  "hint_x": 0,
+  "hint_y": 0,
+  "end_chars": "-()[]{}:;'\"/\\,.?!",
+  "anchor": "caret",
+  "immediate": true,
+  "case_sensitive": false,
+  "hint_clickable": true
+ },
+ "recent": {
+  "enabled": false,
+  "placement": "bottom",
+  "limit": 5,
+  "in_filtered": true,
+  "in_submenu": false,
+  "record_tray": false
+ },
+ "autostart": {
+  "enabled": false,
+  "use_task": false,
+  "as_admin": false
+ },
+ "block": {
+  "enabled": false,
+  "apps": []
+ },
+ "language": "chinese",
+ "menu_profile": "默认",
+ "next_id": 19,
+ "items": [],
+ "tray_menu": {
+  "kind": "Submenu",
+  "id": "__tray__",
+  "label": "托盘右键菜单",
+  "badge": "",
+  "accel": "",
+  "shortcut": "",
+  "hotkey": "",
+  "show_badges": null,
+  "show_shortcuts": null,
+  "enabled": true,
+  "actions": [],
+  "children": [
+   {
+    "kind": "Item",
+    "id": "tray-settings",
+    "label": "设置…",
+    "badge": "",
+    "accel": "P",
+    "shortcut": "",
+    "hotkey": "",
+    "show_badges": null,
+    "show_shortcuts": null,
+    "enabled": true,
+    "actions": [
+     {
+      "kind": "Builtin",
+      "value": "open-settings",
+      "delay_ms": 0
+     }
+    ],
+    "children": []
+   },
+   {
+    "kind": "Item",
+    "id": "custom-1790",
+    "label": "配置目录",
+    "badge": "",
+    "accel": "J",
+    "shortcut": "",
+    "hotkey": "",
+    "show_badges": null,
+    "show_shortcuts": null,
+    "enabled": true,
+    "actions": [
+     {
+      "kind": "Builtin",
+      "value": "open-config-dir",
+      "delay_ms": 0
+     }
+    ],
+    "children": []
+   },
+   {
+    "kind": "Item",
+    "id": "custom-1791",
+    "label": "重新加载菜单",
+    "badge": "",
+    "accel": "R",
+    "shortcut": "",
+    "hotkey": "",
+    "show_badges": null,
+    "show_shortcuts": null,
+    "enabled": true,
+    "actions": [
+     {
+      "kind": "Builtin",
+      "value": "reload-menu",
+      "delay_ms": 0
+     }
+    ],
+    "children": []
+   },
+   {
+    "kind": "Item",
+    "id": "tray-popup",
+    "label": "打开完整菜单",
+    "badge": "",
+    "accel": "M",
+    "shortcut": "",
+    "hotkey": "",
+    "show_badges": null,
+    "show_shortcuts": null,
+    "enabled": true,
+    "actions": [
+     {
+      "kind": "Builtin",
+      "value": "open-menu",
+      "delay_ms": 0
+     }
+    ],
+    "children": []
+   },
+   {
+    "kind": "Separator",
+    "id": "custom-1792",
+    "label": "",
+    "badge": "",
+    "accel": "",
+    "shortcut": "",
+    "hotkey": "",
+    "show_badges": null,
+    "show_shortcuts": null,
+    "enabled": true,
+    "actions": [],
+    "children": []
+   },
+   {
+    "kind": "Item",
+    "id": "custom-1793",
+    "label": "关于",
+    "badge": "",
+    "accel": "A",
+    "shortcut": "",
+    "hotkey": "",
+    "show_badges": null,
+    "show_shortcuts": null,
+    "enabled": true,
+    "actions": [
+     {
+      "kind": "Builtin",
+      "value": "about",
+      "delay_ms": 0
+     }
+    ],
+    "children": []
+   },
+   {
+    "kind": "Item",
+    "id": "custom-1794",
+    "label": "重启",
+    "badge": "",
+    "accel": "R",
+    "shortcut": "",
+    "hotkey": "",
+    "show_badges": null,
+    "show_shortcuts": null,
+    "enabled": true,
+    "actions": [
+     {
+      "kind": "Builtin",
+      "value": "restart",
+      "delay_ms": 0
+     }
+    ],
+    "children": []
+   },
+   {
+    "kind": "Item",
+    "id": "tray-quit",
+    "label": "退出",
+    "badge": "",
+    "accel": "Q",
+    "shortcut": "",
+    "hotkey": "",
+    "show_badges": null,
+    "show_shortcuts": null,
+    "enabled": true,
+    "actions": [
+     {
+      "kind": "Builtin",
+      "value": "quit",
+      "delay_ms": 0
+     }
+    ],
+    "children": []
+   }
+  ]
+ },
+ "recent_items": [],
+ "tray_icon": ""
+}

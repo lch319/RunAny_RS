@@ -1,0 +1,2510 @@
+{
+ "name": "RunAny 2",
+ "next_id": 197,
+ "items": [
+  {
+   "kind": "Submenu",
+   "id": "custom-1",
+   "label": "常用",
+   "badge": "",
+   "accel": "A",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "children": [
+    {
+     "kind": "Item",
+     "id": "custom-90",
+     "label": "微信",
+     "badge": "",
+     "accel": "W",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "WeChat.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-2",
+     "label": "Chrome浏览器",
+     "badge": "",
+     "accel": "C",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "chrome.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-59",
+     "label": "Edge",
+     "badge": "",
+     "accel": "E",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "msedge.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Separator",
+     "id": "sep-17",
+     "label": "",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-4",
+     "label": "StrokesPlus鼠标手势",
+     "badge": "",
+     "accel": "S",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "StrokesPlus.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-5",
+     "label": "Ditto剪贴板",
+     "badge": "",
+     "accel": "D",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "Ditto.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-6",
+   "label": "办公",
+   "badge": "",
+   "accel": "W",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "contexts": [
+    "file"
+   ],
+   "file_exts": "doc|docx|xls|xlsx|ppt|pptx|wps|et|dps",
+   "context_mode": "own",
+   "children": [
+    {
+     "kind": "Item",
+     "id": "custom-7",
+     "label": "word",
+     "badge": "",
+     "accel": "W",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "winword.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-8",
+     "label": "Excel",
+     "badge": "",
+     "accel": "E",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "excel.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-9",
+     "label": "PPT",
+     "badge": "",
+     "accel": "T",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "powerpnt.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Submenu",
+     "id": "custom-10",
+     "label": "WPS",
+     "badge": "",
+     "accel": "S",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": [
+      {
+       "kind": "Item",
+       "id": "custom-11",
+       "label": "WPS",
+       "badge": "",
+       "accel": "W",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "WPS.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-12",
+       "label": "ET",
+       "badge": "",
+       "accel": "E",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "et.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "kind": "Separator",
+     "id": "sep-18",
+     "label": "",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-14",
+   "label": "网址",
+   "badge": "",
+   "accel": "U",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "contexts": [
+    "text"
+   ],
+   "context_mode": "own",
+   "children": [
+    {
+     "kind": "Submenu",
+     "id": "custom-179",
+     "label": "视频",
+     "badge": "",
+     "accel": "V",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": [
+      {
+       "kind": "Item",
+       "id": "custom-180",
+       "label": "优酷",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "http://www.soku.com/search_video/q_%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-181",
+       "label": "腾讯",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "http://v.qq.com/x/search/?q=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-182",
+       "label": "B站",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "http://search.bilibili.com/all?keyword=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-183",
+       "label": "爱奇艺",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "http://so.iqiyi.com/so/q_%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-184",
+       "label": "乐视",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "http://so.le.com/s?wd=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-185",
+       "label": "搜狐",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "http://so.tv.sohu.com/mts?wd=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-186",
+       "label": "pptv",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "http://sou.pptv.com/s_video?kw=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-187",
+       "label": "芒果tv",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "https://so.mgtv.com/so?k=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-188",
+       "label": "咪咕视频",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "https://www.miguvideo.com/mgs/website/prd/search.html?keywords=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-189",
+       "label": "360影视",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "http://so.360kan.com/index.php?kw=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-190",
+       "label": "搜狗视频",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Url",
+         "value": "https://v.sogou.com/v?query=%getZz%",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "kind": "Item",
+     "id": "custom-15",
+     "label": "百度",
+     "badge": "",
+     "accel": "B",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Url",
+       "value": "https://www.baidu.com/s?wd={selection}",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-16",
+     "label": "谷歌",
+     "badge": "",
+     "accel": "G",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Url",
+       "value": "https://www.google.com/search?q={selection}&gws_rd=ssl",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-17",
+     "label": "翻译",
+     "badge": "",
+     "accel": "F",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Url",
+       "value": "https://translate.google.cn/#auto/zh-CN/",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Separator",
+     "id": "custom-192",
+     "label": "",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-19",
+     "label": "淘宝",
+     "badge": "",
+     "accel": "T",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Url",
+       "value": "https://s.taobao.com/search?q={selection}",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-20",
+     "label": "京东",
+     "badge": "",
+     "accel": "D",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Url",
+       "value": "https://search.jd.com/Search?keyword={selection}&enc=utf-8",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-21",
+     "label": "知乎",
+     "badge": "",
+     "accel": "Z",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Url",
+       "value": "https://www.zhihu.com/search?type=content&q={selection}",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Separator",
+     "id": "sep-19",
+     "label": "",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-23",
+     "label": "RunAny_RS",
+     "badge": "",
+     "accel": "R",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Url",
+       "value": "https://github.com/lch319/RunAny_RS",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-24",
+   "label": "图片",
+   "badge": "",
+   "accel": "G",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "contexts": [
+    "file"
+   ],
+   "file_exts": "bmp|gif|jpeg|jpg|png",
+   "context_mode": "own",
+   "children": [
+    {
+     "kind": "Item",
+     "id": "custom-25",
+     "label": "画图",
+     "badge": "",
+     "accel": "T",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "mspaint.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-99",
+     "label": "IrfanView",
+     "badge": "",
+     "accel": "I",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "i_view64.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-100",
+     "label": "BandiView",
+     "badge": "",
+     "accel": "B",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "BandiView.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-101",
+     "label": "Imagine",
+     "badge": "",
+     "accel": "I",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "Imagine64.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-29",
+   "label": "影音",
+   "badge": "",
+   "accel": "V",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "contexts": [
+    "file"
+   ],
+   "file_exts": "avi|mkv|mp4|rm|rmvb|flv|wmv|swf|mp3",
+   "context_mode": "own",
+   "children": [
+    {
+     "kind": "Item",
+     "id": "custom-63",
+     "label": "Bolayer",
+     "badge": "",
+     "accel": "B",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "Bolayer.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-31",
+     "label": "PotPlayer",
+     "badge": "",
+     "accel": "P",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "PotPlayerMini64.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Separator",
+     "id": "sep-20",
+     "label": "",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-33",
+     "label": "云音乐",
+     "badge": "",
+     "accel": "C",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "cloudmusic.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-34",
+     "label": "QQ音乐",
+     "badge": "",
+     "accel": "Q",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "QQMusic.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-35",
+   "label": "编辑",
+   "badge": "",
+   "accel": "E",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "contexts": [
+    "file"
+   ],
+   "file_exts": "txt|ini|cmd|bat|md|ahk|html",
+   "context_mode": "own",
+   "children": [
+    {
+     "kind": "Item",
+     "id": "custom-36",
+     "label": "记事本",
+     "badge": "",
+     "accel": "N",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "notepad.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-95",
+     "label": "Notepad4",
+     "badge": "",
+     "accel": "4",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "Notepad4.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-37",
+   "label": "文件",
+   "badge": "",
+   "accel": "F",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "children": [
+    {
+     "kind": "Item",
+     "id": "custom-171",
+     "label": "我的桌面",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "{ahkvar:A_Desktop}",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-38",
+     "label": "WinRAR",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "WinRAR.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-40",
+     "label": "Everything文件秒搜",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "Everything.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-41",
+   "label": "系统",
+   "badge": "",
+   "accel": "S",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "children": [
+    {
+     "kind": "Submenu",
+     "id": "custom-102",
+     "label": "电源",
+     "badge": "",
+     "accel": "P",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": [
+      {
+       "kind": "Item",
+       "id": "custom-103",
+       "label": "重启资源管理器",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "%ComSpec% /c \"taskkill /f /im explorer.exe & start explorer.exe\"",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-104",
+       "label": "关闭显示器",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "%ComSpec% /c powershell (Add-Type '[DllImport(\\\"user32.dll\\\")]^public static extern int PostMessage(int hWnd, int hMsg, int wParam, int lParam);' -Name a -Pas)::PostMessage(-1,0x0112,0xF170,2)",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-105",
+       "label": "系统锁屏",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "rundll32.exe user32.dll LockWorkStation",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-107",
+       "label": "系统休眠",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "rundll32.exe powrprof.dll,SetSuspendState",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-108",
+       "label": "系统注销",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "shutdown.exe -l",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-109",
+       "label": "系统立即关机",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "shutdown.exe -s -t 0",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-110",
+       "label": "系统立即重启",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "shutdown.exe -r -t 0",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "kind": "Submenu",
+     "id": "custom-142",
+     "label": "控制面板",
+     "badge": "",
+     "accel": "C",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": [
+      {
+       "kind": "Item",
+       "id": "custom-143",
+       "label": "网络连接",
+       "badge": "",
+       "accel": "N",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe ncpa.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-144",
+       "label": "控制面板",
+       "badge": "",
+       "accel": "C",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-145",
+       "label": "辅助功能选项",
+       "badge": "",
+       "accel": "E",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe access.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-146",
+       "label": "添加或删除程序",
+       "badge": "",
+       "accel": "A",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe appwiz.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-147",
+       "label": "显示属性",
+       "badge": "",
+       "accel": "D",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe desk.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-148",
+       "label": "Windows防火墙",
+       "badge": "",
+       "accel": "F",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe firewall.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-149",
+       "label": "添加硬件向导",
+       "badge": "",
+       "accel": "H",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe hdwwiz.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-150",
+       "label": "Internet属性",
+       "badge": "",
+       "accel": "I",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe inetcpl.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-151",
+       "label": "区域和语言选项",
+       "badge": "",
+       "accel": "L",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe intl.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-152",
+       "label": "游戏控制器",
+       "badge": "",
+       "accel": "J",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe joy.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-153",
+       "label": "Java控制面板",
+       "badge": "",
+       "accel": "Z",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe jpicpl32.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-154",
+       "label": "鼠标属性",
+       "badge": "",
+       "accel": "M",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe main.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-155",
+       "label": "声音和音频设备属性",
+       "badge": "",
+       "accel": "X",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe mmsys.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-156",
+       "label": "网络安装向导",
+       "badge": "",
+       "accel": "Q",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe netsetup.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-157",
+       "label": "用户帐户",
+       "badge": "",
+       "accel": "U",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe lusrmgr.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-158",
+       "label": "ODBC数据源管理器",
+       "badge": "",
+       "accel": "O",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe odbccp32.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-159",
+       "label": "电源选项属性",
+       "badge": "",
+       "accel": "P",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe powercfg.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-160",
+       "label": "系统属性",
+       "badge": "",
+       "accel": "S",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe sysdm.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-161",
+       "label": "电话和调制解调器选项",
+       "badge": "",
+       "accel": "R",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe telephon.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-162",
+       "label": "日期和时间属性",
+       "badge": "",
+       "accel": "T",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe timedate.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-163",
+       "label": "Windows安全中心",
+       "badge": "",
+       "accel": "W",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe wscui.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-164",
+       "label": "自动更新",
+       "badge": "",
+       "accel": "G",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "control.exe wuaucpl.cpl",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "kind": "Submenu",
+     "id": "custom-116",
+     "label": "系统工具",
+     "badge": "",
+     "accel": "T",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": [
+      {
+       "kind": "Item",
+       "id": "custom-117",
+       "label": "注册表",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "regedit.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-118",
+       "label": "磁盘清理",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "cleanmgr.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-119",
+       "label": "屏幕讲述人",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "narrator.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-120",
+       "label": "任务管理器",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "taskmgr.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-121",
+       "label": "步骤记录器",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "psr.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Separator",
+       "id": "custom-122",
+       "label": "",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-123",
+       "label": "计算机管理",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "compmgmt.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-124",
+       "label": "设备管理器",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "devmgmt.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-125",
+       "label": "磁盘管理器",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "diskmgmt.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-126",
+       "label": "共享文件夹",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "fsmgmt.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-127",
+       "label": "服务",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "services.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-128",
+       "label": "本机用户和组",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "lusrmgr.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-129",
+       "label": "任务计划程序",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "taskschd.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-130",
+       "label": "系统认证证书",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "certmgr.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-131",
+       "label": "事件查看器",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "eventvwr.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-132",
+       "label": "性能监视器",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "perfmon.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-133",
+       "label": "组件服务",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "comexp.msc",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Separator",
+       "id": "custom-134",
+       "label": "",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-135",
+       "label": "上帝模式[所有任务]",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "%WinDir%\\explorer.exe shell:::{ED7BA470-8E54-465E-825C-99712043E01C}",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-136",
+       "label": "键盘属性",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "RunDll32.exe shell32.dll,Control_RunDLL main.cpl @1",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-137",
+       "label": "任务栏属性",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "RunDll32.exe shell32.dll,Options_RunDLL 1",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-138",
+       "label": "系统属性",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "RunDll32.exe shell32.dll,Control_RunDLL sysdm.cpl,,3",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-139",
+       "label": "系统信息",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "%WinDir%\\System32\\msinfo32.exe",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-140",
+       "label": "用户账户",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "RunDll32.exe netplwiz.dll,UsersRunDll",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-141",
+       "label": "环境变量设置",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "rundll32.exe sysdm.cpl,EditEnvironmentVariables",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "kind": "Submenu",
+     "id": "custom-165",
+     "label": "文件夹选项",
+     "badge": "",
+     "accel": "F",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [],
+     "children": [
+      {
+       "kind": "Item",
+       "id": "custom-166",
+       "label": "文件夹选项–常规",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "RunDll32.exe shell32.dll,Options_RunDLL 0",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-167",
+       "label": "文件夹选项–查看",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "RunDll32.exe shell32.dll,Options_RunDLL 7",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      },
+      {
+       "kind": "Item",
+       "id": "custom-168",
+       "label": "文件夹选项–搜索",
+       "badge": "",
+       "accel": "",
+       "shortcut": "",
+       "hotkey": "",
+       "show_badges": null,
+       "show_shortcuts": null,
+       "enabled": true,
+       "actions": [
+        {
+         "kind": "Run",
+         "value": "RunDll32.exe shell32.dll,Options_RunDLL 2",
+         "delay_ms": 0
+        }
+       ],
+       "children": []
+      }
+     ]
+    },
+    {
+     "kind": "Item",
+     "id": "custom-113",
+     "label": "任务管理器",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "Taskmgr.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-42",
+     "label": "cmd.exe",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "cmd.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-170",
+     "label": "powershell",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "powershell.exe",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    },
+    {
+     "kind": "Item",
+     "id": "custom-44",
+     "label": "hosts文件",
+     "badge": "",
+     "accel": "",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Run",
+       "value": "notepad.exe %A_WinDir%\\System32\\drivers\\etc\\hosts",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-45",
+   "label": "输入",
+   "badge": "",
+   "accel": "T",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "children": [
+    {
+     "kind": "Item",
+     "id": "custom-46",
+     "label": "当前时间",
+     "badge": "",
+     "accel": "N",
+     "shortcut": "",
+     "hotkey": "",
+     "show_badges": null,
+     "show_shortcuts": null,
+     "enabled": true,
+     "actions": [
+      {
+       "kind": "Text",
+       "value": "{date}-{time}",
+       "delay_ms": 0
+      }
+     ],
+     "children": []
+    }
+   ]
+  },
+  {
+   "kind": "Submenu",
+   "id": "custom-47",
+   "label": "桌面",
+   "badge": "",
+   "accel": "D",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [
+    {
+     "kind": "Run",
+     "value": "",
+     "delay_ms": 0
+    }
+   ],
+   "children": [],
+   "autofill": {
+    "enabled": true,
+    "mode": "Live",
+    "dirs": "{ahkvar:A_Desktop}",
+    "exts": "lnk|exe",
+    "full_path": false,
+    "recurse": false,
+    "limit": 0
+   }
+  },
+  {
+   "kind": "Separator",
+   "id": "sep-21",
+   "label": "",
+   "badge": "",
+   "accel": "",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "children": []
+  },
+  {
+   "kind": "Item",
+   "id": "custom-52",
+   "label": "QQ.exe",
+   "badge": "",
+   "accel": "Q",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [
+    {
+     "kind": "Run",
+     "value": "QQ.exe",
+     "delay_ms": 0
+    }
+   ],
+   "children": []
+  },
+  {
+   "kind": "Item",
+   "id": "custom-54",
+   "label": "我的电脑",
+   "badge": "",
+   "accel": "Z",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [
+    {
+     "kind": "Run",
+     "value": "explorer.exe",
+     "delay_ms": 0
+    }
+   ],
+   "children": []
+  },
+  {
+   "kind": "Separator",
+   "id": "custom-173",
+   "label": "",
+   "badge": "",
+   "accel": "",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [],
+   "children": []
+  },
+  {
+   "kind": "Item",
+   "id": "custom-174",
+   "label": "设置",
+   "badge": "",
+   "accel": "S",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [
+    {
+     "kind": "Builtin",
+     "value": "open-settings",
+     "delay_ms": 0
+    }
+   ],
+   "children": []
+  },
+  {
+   "kind": "Item",
+   "id": "custom-176",
+   "label": "退出",
+   "badge": "",
+   "accel": "E",
+   "shortcut": "",
+   "hotkey": "",
+   "show_badges": null,
+   "show_shortcuts": null,
+   "enabled": true,
+   "actions": [
+    {
+     "kind": "Builtin",
+     "value": "quit",
+     "delay_ms": 0
+    }
+   ],
+   "children": []
+  }
+ ]
+}

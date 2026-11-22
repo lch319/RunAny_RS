@@ -4076,12 +4076,17 @@ impl ItemEditor {
                     .flex()
                     .items_center()
                     .gap(px(6.))
-                    .child(
-                        div()
-                            .text_size(px(9.5))
-                            .text_color(theme::ui_text_tertiary())
-                            .child(action.kind.hint()),
-                    )
+                    // 「运行程序」不再显示那行说明：它上面的输入框、占位符胶囊已经把
+                    // 用法说清楚了，再加一句「例如 notepad.exe…」纯属噪音。
+                    // （下面那行「解析到 C://...」是实时结果，留着。）
+                    .when(action.kind != ActionKind::Run, |row| {
+                        row.child(
+                            div()
+                                .text_size(px(9.5))
+                                .text_color(theme::ui_text_tertiary())
+                                .child(action.kind.hint()),
+                        )
+                    })
                     .when(!action.is_ready(), |row| {
                         row.child(
                             div()

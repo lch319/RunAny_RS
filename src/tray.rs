@@ -310,7 +310,7 @@ mod imp {
     /// 程序自带的图标：`assets/icon.ico`（`tools/make_icon.py` 生成的那份 RA 字母标）。
     static EMBEDDED_ICON: &[u8] = include_bytes!("../assets/icon.ico");
 
-    fn builtin_rgba(size: u32) -> Vec<u8> {
+    pub(super) fn builtin_rgba(size: u32) -> Vec<u8> {
         // 先试自带图标；解不出来再退回原来那个「三道横线」的兜底画法
         if let Ok(image) = image::load_from_memory(EMBEDDED_ICON) {
             let rgba = image.to_rgba8();
@@ -326,7 +326,7 @@ mod imp {
     }
 
     /// 兜底图标：深色圆角方块 + 三道横线。
-    fn bars_rgba(size: u32) -> Vec<u8> {
+    pub(super) fn bars_rgba(size: u32) -> Vec<u8> {
         let side = size as f32;
         let radius = side * 0.22;
         // (y 起点, x 起点, x 终点) —— 都是相对边长的比例
@@ -433,4 +433,26 @@ mod imp {
     pub fn spawn(_sender: async_channel::Sender<super::TrayEvent>) {}
 
     pub fn apply(_config: super::TrayConfig) {}
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use crate::tray::imp;
+    /// 内置图标必须真的来自 `assets/icon.ico`（解不出来时会退回「三道横线」的兜底画法，
+    /// 那种情况在界面上根本看不出来是 bug，只能靠这个测试卡住）。
+    #[test]
+    fn the_builtin_icon_comes_from_the_bundled_ico() {
+        let embedded = imp::builtin_rgba(32);
+        let fallback = imp::bars_rgba(32);
+        assert_ne!(
+            embedded, fallback,
+            "内置图标还是兜底的「三道横线」：assets/icon.ico 没解出来"
+        );
+        // 有效图标应该有不同程度的透明度和不止一种颜色（纯色说明画错了）
+        let colors: std::collections::HashSet<[u8; 4]> = embedded
+            .chunks_exact(4)
+            .map(|pixel| [pixel[0], pixel[1], pixel[2], pixel[3]])
+            .collect();
+        assert!(colors.len() > 8, "内置图标只有 {} 种颜色，不像真图标", colors.len());
+    }
 }
