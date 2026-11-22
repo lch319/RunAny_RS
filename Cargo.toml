@@ -1,6 +1,6 @@
 [package]
 name = "runany_rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "RunAny_RS —— Rust + GPUI 的全局快捷键弹出式（级联）菜单"
 license = "MIT"

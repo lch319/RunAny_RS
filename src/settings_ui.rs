@@ -7707,7 +7707,55 @@ impl SettingsView {
     }
 
     fn about_page(&mut self, settings: &MenuSettings, _cx: &mut Context<Self>) -> Vec<AnyElement> {
+        // 项目仓库：点一下用默认浏览器打开，地址本身也摊在界面上（方便手抄/复制）
+        let repo = "https://github.com/lch319/RunAny_RS";
+        let repo_row = div()
+            .id("about-repo")
+            .px(px(9.))
+            .py(px(8.))
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .cursor_pointer()
+            .hover(|style| style.bg(theme::surface_hover()))
+            .on_click({
+                let repo = repo.to_string();
+                move |_event, _window, cx: &mut gpui::App| {
+                    let step = settings::ActionStep::new(
+                        settings::ActionKind::Url,
+                        repo.clone(),
+                    );
+                    let _ = crate::popup::test_run_step(cx, &step);
+                }
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(px(11.5))
+                    .text_color(theme::accent())
+                    .child("github.com/lch319/RunAny_RS"),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .text_size(px(10.))
+                    .text_color(theme::ui_text_tertiary())
+                    .child(crate::i18n::t("点击用浏览器打开 · 问题反馈 / 更新都在这里")),
+            )
+            .into_any_element();
+
         vec![
+            section(
+                "关于",
+                "RunAny_RS · MIT · Rust + GPUI",
+                vec![
+                    repo_row,
+                    info_row("版本", env!("CARGO_PKG_VERSION")),
+                    info_row("许可", "MIT（可自由使用 / 修改 / 再发布）"),
+                ],
+            ),
             section(
                 "全局快捷键",
                 "在任何应用里按下都会在鼠标处弹出",
