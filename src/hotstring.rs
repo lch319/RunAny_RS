@@ -132,6 +132,8 @@ struct Config {
     hide_hint: bool,
     /// 敲完最后一个字符就执行，不用再按空格 / 回车（AHK 的 `:*:`）
     immediate: bool,
+    /// 输入法组字中也尝试匹配（默认关，见 `HotstringSettings::ime_match`）
+    ime_match: bool,
 }
 
 static CONFIG: RwLock<Option<Arc<Config>>> = RwLock::new(None);
@@ -292,6 +294,7 @@ fn rebuild() -> (Config, bool) {
         hint_path_chars: cfg.hint_path_chars as usize,
         hide_hint: cfg.hide_hint || !active,
         immediate: cfg.immediate,
+        ime_match: cfg.ime_match,
     };
     (config, active)
 }
@@ -723,7 +726,7 @@ fn on_key(key: RawKey) -> bool {
             };
             match_rule(&config, &typed)
         };
-        if let Some(rule) = hit {
+        if let Some(rule) = hit.filter(|_| !composing() || config.ime_match) {
             // 结束字符也吞掉，动作跑完再补发。
             //
             // 不吞的话这一步会抢跑：钩子里注入的退格、动作线程注入的替换文本，
@@ -752,6 +755,18 @@ fn on_key(key: RawKey) -> bool {
         trim_tail(&mut typed, 48);
         typed.clone()
     };
+    // 中文输入法正在组字的这一段：**默认不匹配**。
+    //
+    // AHK 也是这个行为。不这样的话会出现更难看的场面：组字还没上屏，
+    // 我们就把替换文本注进去，输入法把注入的字母又吸进候选 —— 屏幕上留下
+    // 「方彤」这种莫名其妙的东西（实测过）。宁可这一下不触发，也不能打出乱码。
+    // 想赌一把的可以在设置里打开「组字中也匹配」。
+    if composing() && !config.ime_match {
+        if ime && is_letter {
+            add_pending(1);
+        }
+        return false;
+    }
     // 敲完就执行（见 `auto_hit`）：这个键**还没送到目标程序**（钩子跑在它前面），
     // 所以直接吞掉它、退格删掉「已经落地的那些字符」就行。
     if let Some(rule) = auto_hit(&config, &prefix) {

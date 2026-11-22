@@ -7628,6 +7628,18 @@ impl SettingsView {
                     cx.notify();
                 }),
             ),
+            toggle_row(
+                "输入法组字时也匹配（实验）",
+                "关着＝和 AHK 一样：中文输入法正在组字时一个键都不抢（推荐）。开着＝先让输入法丢掉组字再展开，部分输入法可能把展开内容吸进候选",
+                cfg.ime_match,
+                cx.listener(|_this, _: &ClickEvent, window, cx| {
+                    settings::update(cx, |settings| {
+                        settings.hotstrings.ime_match = !settings.hotstrings.ime_match;
+                    });
+                    window.refresh();
+                    cx.notify();
+                }),
+            ),
         ];
 
         vec![

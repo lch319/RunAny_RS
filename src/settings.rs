@@ -1739,6 +1739,13 @@ pub struct HotstringSettings {
     pub case_sensitive: bool,
     /// 提示卡片上可以点：鼠标悬上去不消失，点哪条就直接执行哪一条
     pub hint_clickable: bool,
+    /// 输入法**组字中**也尝试匹配（默认关）
+    ///
+    /// 关着 = AHK 的行为：中文输入法正在组字时不触发、也不抢键。
+    /// 开着 = 命中后先让输入法丢掉组字再展开 —— 属于尽力而为：有些输入法
+    /// （搜狗、微软拼音）会把随后注入的文本又吸进候选里。
+    #[serde(default)]
+    pub ime_match: bool,
 }
 
 /// 热字符串提示卡片贴在哪儿。
@@ -1783,6 +1790,7 @@ impl Default for HotstringSettings {
             immediate: true,
             case_sensitive: false,
             hint_clickable: true,
+            ime_match: false,
         }
     }
 }
