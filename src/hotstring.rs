@@ -806,10 +806,20 @@ fn fire_hit(rule: &Rule, replay: Option<Replay>) {
     // `:O:` 不把结束字符跟着打出去；`:B0:` 不删已经敲进去的触发词
     let replay = if rule.omit_end { None } else { replay };
     let (screen, composing) = take_screen();
-    let screen = if rule.no_backspace { 0 } else { screen };
     // 光标位移是实测值，比按物理键推算准（输入法选候选会吃掉/合并字符）
     let measured = measured_screen();
-    let screen = measured.unwrap_or(screen);
+    let mut screen = measured.unwrap_or(screen);
+    // `:B0:` 一个字符都不删 —— 必须放在「实测值」**之后**，
+    // 否则刚清成 0 又被实测值覆盖回去了（B0 之前就是这么失效的）
+    if rule.no_backspace {
+        screen = 0;
+    }
+    // `:?:` 只删**触发词本身**，前面的字母要留着（AHK：`xftw` → `xhello`）。
+    // 默认（不带 `?`）整段缓冲都是触发词，删整段才对。组字时不算 —— 那时候
+    // 屏幕上的字符数和敲的键数对不上，交给上面那套实测逻辑。
+    if rule.inside_word && !composing {
+        screen = rule.text.chars().count();
+    }
     if std::env::var_os("GPUI_MENU_DEBUG_HS").is_some() {
         hs_log(&format!(
             "命中 id={id} 要退格={screen}（实测={measured:?} 推算={screen}）命中时还在组字={composing} 补发={:?}",

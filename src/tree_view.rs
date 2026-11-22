@@ -521,14 +521,32 @@ impl TreeView {
                 settings::DropTarget::After(path)
             });
         }
-        // 拖到别的行上**只调顺序**，不再「拖进中间就变成它的子菜单」。
+        // 落点规则分两种，取决于**目标本身是不是能装东西**：
         //
-        // 原来行中间 28%~72% 那块是 `Into`（变成子菜单），可用户拖着拖着就从
-        // 旁边划过一行，一不小心整块被塞进别人肚子里，看着像「菜单项全乱了」。
-        // 要建子菜单有专门的按钮（「添加子菜单」），拖拽只负责挪位置。
+        // - **子菜单**：行中间那块是「放进去」（变成它的子项）—— 这是用户明确
+        //   要的：「拖到子菜单上应该能加进它的子菜单里」。
+        // - **普通菜单项**（叶子）：永远只有「插前面 / 插后面」。
+        //   以前只要拖到叶子中间就 `Into`，叶子因此**被迫变成子菜单**，
+        //   用户看到的就是「拖过去把别人变成了子菜单」—— 这才是要修的那个 bug。
         //
-        // 分界放在 40%：偏上＝插到它前面，剩下大半都算「插到它后面」。
-        if ratio < 0.4 {
+        // 另外悬停在收起的子菜单上 600ms 会自动展开（见 on_mouse_move），
+        // 展开后就能直接拖到里面的某一行上，落点更精确。
+        let accepts_children = kinds
+            .get(&path_key(&path))
+            .map(|kind| *kind == ItemKind::Submenu)
+            .unwrap_or(false)
+            || rows
+                .iter()
+                .any(|row| row.path == path && row.has_children);
+        if accepts_children {
+            if ratio < 0.30 {
+                Some(settings::DropTarget::Before(path))
+            } else if ratio > 0.70 {
+                Some(settings::DropTarget::After(path))
+            } else {
+                Some(settings::DropTarget::Into(path))
+            }
+        } else if ratio < 0.4 {
             Some(settings::DropTarget::Before(path))
         } else {
             Some(settings::DropTarget::After(path))
