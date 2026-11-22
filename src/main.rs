@@ -47,6 +47,7 @@ mod tip_template;
 mod tooltip;
 mod tray;
 mod tree_view;
+mod update;
 mod undo;
 mod when;
 mod when_ui;

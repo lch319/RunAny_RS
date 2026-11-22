@@ -232,8 +232,64 @@ pub fn parse_png_size(bytes: &[u8]) -> Option<(u32, u32)> {
     (w > 0 && h > 0).then_some((w, h))
 }
 
+
+
 #[cfg(windows)]
 mod imp {
+    #[link(name = "winhttp")]
+    extern "system" {
+        fn WinHttpOpen(
+            agent: *const u16,
+            access_type: u32,
+            proxy: *const u16,
+            bypass: *const u16,
+            flags: u32,
+        ) -> *mut std::ffi::c_void;
+        fn WinHttpConnect(session: *mut std::ffi::c_void, server: *const u16, port: u16, reserved: u32)
+            -> *mut std::ffi::c_void;
+        fn WinHttpOpenRequest(
+            connect: *mut std::ffi::c_void,
+            verb: *const u16,
+            object: *const u16,
+            version: *const u16,
+            referrer: *const u16,
+            accept_types: *const *const u16,
+            flags: u32,
+        ) -> *mut std::ffi::c_void;
+        fn WinHttpSendRequest(
+            request: *mut std::ffi::c_void,
+            headers: *const u16,
+            headers_len: u32,
+            optional: *mut std::ffi::c_void,
+            optional_len: u32,
+            total_len: u32,
+            context: usize,
+        ) -> i32;
+        fn WinHttpReceiveResponse(request: *mut std::ffi::c_void, reserved: *mut std::ffi::c_void) -> i32;
+        fn WinHttpQueryHeaders(
+            request: *mut std::ffi::c_void,
+            info_level: u32,
+            name: *const u16,
+            buffer: *mut std::ffi::c_void,
+            buffer_len: *mut u32,
+            index: *mut u32,
+        ) -> i32;
+        fn WinHttpReadData(
+            request: *mut std::ffi::c_void,
+            buffer: *mut std::ffi::c_void,
+            to_read: u32,
+            read: *mut u32,
+        ) -> i32;
+        fn WinHttpSetTimeouts(
+            session: *mut std::ffi::c_void,
+            resolve: i32,
+            connect: i32,
+            send: i32,
+            receive: i32,
+        ) -> i32;
+        fn WinHttpCloseHandle(handle: *mut std::ffi::c_void) -> i32;
+    }
+
     use std::ffi::c_void;
 
     use super::{MouseKind, RawKey, RawMouse, INJECT_MAGIC};
@@ -3093,6 +3149,136 @@ mod imp {
         killed
     }
 
+    // ---- WinHTTP：检查更新 ----
+    //
+    // 不引第三方 HTTP 库：WinHTTP 是系统自带的，编译进 exe 的体积几乎为零，
+    // 也不用担心又多一棵依赖树（这个项目对体积敏感）。
+
+    /// 发一个 GET，返回 (状态码, 正文)。失败给一句能看懂的话。
+    pub fn http_get(url: &str, timeout_ms: u32) -> Result<(u16, String), String> {
+        let (secure, rest) = if let Some(rest) = url.strip_prefix("https://") {
+            (true, rest)
+        } else if let Some(rest) = url.strip_prefix("http://") {
+            (false, rest)
+        } else {
+            return Err("只支持 http/https".to_string());
+        };
+        let (host, path) = match rest.split_once('/') {
+            Some((host, path)) => (host, format!("/{path}")),
+            None => (rest, "/".to_string()),
+        };
+        if host.is_empty() {
+            return Err("URL 里没有主机名".to_string());
+        }
+
+        fn wide(text: &str) -> Vec<u16> {
+            text.encode_utf16().chain(std::iter::once(0)).collect()
+        }
+        let agent_wide = wide("RunAny_RS/update-check");
+        let host_wide = wide(host);
+        let verb_wide = wide("GET");
+        let path_wide = wide(&path);
+        let headers_wide =
+            wide("User-Agent: RunAny_RS\r\nAccept: application/vnd.github+json\r\n");
+
+        unsafe {
+            // 4 = WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY：走系统代理设置
+            let session = WinHttpOpen(
+                agent_wide.as_ptr(),
+                4,
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+            );
+            if session.is_null() {
+                return Err("WinHTTP 初始化失败".to_string());
+            }
+            let timeout = timeout_ms.min(30_000) as i32;
+            let _ = WinHttpSetTimeouts(session, timeout, timeout, timeout, timeout);
+
+            let connect = WinHttpConnect(
+                session,
+                host_wide.as_ptr(),
+                if secure { 443 } else { 80 },
+                0,
+            );
+            if connect.is_null() {
+                let _ = WinHttpCloseHandle(session);
+                return Err("连不上 GitHub（网络不通？）".to_string());
+            }
+
+            let request = WinHttpOpenRequest(
+                connect,
+                verb_wide.as_ptr(),
+                path_wide.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                std::ptr::null(),
+                if secure { 0x0080_0000 } else { 0 }, // WINHTTP_FLAG_SECURE
+            );
+            if request.is_null() {
+                let _ = WinHttpCloseHandle(connect);
+                let _ = WinHttpCloseHandle(session);
+                return Err("建不起请求".to_string());
+            }
+
+            let sent = WinHttpSendRequest(
+                request,
+                headers_wide.as_ptr(),
+                u32::MAX, // -1：头部按 NUL 结尾算
+                std::ptr::null_mut(),
+                0,
+                0,
+                0,
+            );
+            let ok = sent != 0 && WinHttpReceiveResponse(request, std::ptr::null_mut()) != 0;
+
+            let mut status: u32 = 0;
+            let mut len = std::mem::size_of::<u32>() as u32;
+            let _ = WinHttpQueryHeaders(
+                request,
+                19 | 0x2000_0000, // WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER
+                std::ptr::null(),
+                &mut status as *mut u32 as *mut _,
+                &mut len,
+                std::ptr::null_mut(),
+            );
+
+            let mut body: Vec<u8> = Vec::new();
+            if ok {
+                loop {
+                    let mut buffer = vec![0u8; 8192];
+                    let mut read: u32 = 0;
+                    let code = WinHttpReadData(
+                        request,
+                        buffer.as_mut_ptr() as *mut _,
+                        buffer.len() as u32,
+                        &mut read,
+                    );
+                    if code == 0 || read == 0 {
+                        break;
+                    }
+                    body.extend_from_slice(&buffer[..read as usize]);
+                    if body.len() > 2 * 1024 * 1024 {
+                        break; // 防止意外的超大响应
+                    }
+                }
+            }
+
+            let _ = WinHttpCloseHandle(request);
+            let _ = WinHttpCloseHandle(connect);
+            let _ = WinHttpCloseHandle(session);
+
+            if !ok {
+                return Err("请求失败（网络不通或被拦）".to_string());
+            }
+            Ok((
+                status as u16,
+                String::from_utf8_lossy(&body).to_string(),
+            ))
+        }
+    }
+
     /// 开机以来经过的毫秒数（AHK 的 `A_TickCount` 同一个口径）。
     pub fn system_uptime_ms() -> u64 {
         use windows_sys::Win32::System::SystemInformation::GetTickCount64;
@@ -3222,7 +3408,7 @@ pub use imp::{
     watch_foreground, window_process_id,
     process_name_of_window, input_context, preview_context, context_of_window,
     foreground_process_name, window_at_cursor, selection_target,
-    system_uptime_ms, is_elevated, kill_other_instances,
+    system_uptime_ms, is_elevated, kill_other_instances, http_get,
     install_input_hooks, set_key_gate, set_mouse_gate, numlock_on, press_numlock,
     modifier_state, click_tick, send_backspaces, send_virtual_key,
     ime_composing, caret_rect,
@@ -3686,6 +3872,11 @@ pub fn system_uptime_ms() -> u64 {
 #[cfg(not(windows))]
 pub fn kill_other_instances() -> usize {
     0
+}
+
+#[cfg(not(windows))]
+pub fn http_get(_url: &str, _timeout_ms: u32) -> Result<(u16, String), String> {
+    Err("只有 Windows 支持".to_string())
 }
 
 #[cfg(not(windows))]

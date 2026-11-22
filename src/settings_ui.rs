@@ -7706,7 +7706,7 @@ impl SettingsView {
         ]
     }
 
-    fn about_page(&mut self, settings: &MenuSettings, _cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn about_page(&mut self, settings: &MenuSettings, cx: &mut Context<Self>) -> Vec<AnyElement> {
         // 项目仓库：点一下用默认浏览器打开，地址本身也摊在界面上（方便手抄/复制）
         let repo = "https://github.com/lch319/RunAny_RS";
         let repo_row = div()
@@ -7746,6 +7746,116 @@ impl SettingsView {
             )
             .into_any_element();
 
+        // ---- 检查更新 ----
+        let update_state = crate::update::state();
+        // 进这一页就顺手查一次（设置里可以关掉）
+        if settings.check_updates && matches!(update_state, crate::update::State::Idle) {
+            crate::update::check(cx, false);
+        }
+        // 正在检查时每 400ms 自己刷一帧：网络请求在后台跑，回来时没有别的
+        // 东西会通知这一页重绘，不主动轮询的话会一直停在「正在检查…」
+        if matches!(update_state, crate::update::State::Checking) {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(400))
+                    .await;
+                let _ = this.update(cx, |_this, cx| cx.notify());
+            })
+            .detach();
+        }
+        let (status_text, status_color) = match &update_state {
+            crate::update::State::Idle => ("还没检查过".to_string(), theme::ui_text_tertiary()),
+            crate::update::State::Checking => ("正在检查…".to_string(), theme::ui_text_tertiary()),
+            crate::update::State::UpToDate => (
+                format!("已是最新（v{}）", crate::update::current()),
+                theme::ui_text_tertiary(),
+            ),
+            crate::update::State::Newer { version, .. } => (
+                format!("发现新版本 {version}，点右边去下载"),
+                theme::accent(),
+            ),
+            crate::update::State::Failed(err) => (err.clone(), theme::danger()),
+        };
+        let mut update_rows = vec![
+            div()
+                .id("about-auto-update")
+                .px(px(9.))
+                .py(px(7.))
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .cursor_pointer()
+                .hover(|style| style.bg(theme::surface_hover()))
+                .on_click(cx.listener(|_this, _: &ClickEvent, window, cx| {
+                    let next = settings::read(|settings| !settings.check_updates);
+                    settings::update(cx, move |settings| settings.check_updates = next);
+                    window.refresh();
+                    cx.notify();
+                }))
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(11.5))
+                        .text_color(theme::text_primary())
+                        .child(crate::i18n::t("自动检查更新（进这一页时查一次）")),
+                )
+                .child(switch(settings.check_updates))
+                .into_any_element(),
+            div()
+                .px(px(9.))
+                .py(px(7.))
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(ghost_button_tagged(
+                    "about-check-update",
+                    "检查更新",
+                    cx.listener(|_this, _: &ClickEvent, window, cx| {
+                        crate::update::check(cx, true);
+                        window.refresh();
+                        cx.notify();
+                    }),
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(10.5))
+                        .text_color(status_color)
+                        .child(status_text),
+                )
+                .into_any_element(),
+        ];
+        if let crate::update::State::Newer { url, .. } = &update_state {
+            let url = url.clone();
+            update_rows.push(
+                div()
+                    .id("about-download")
+                    .px(px(9.))
+                    .py(px(7.))
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .cursor_pointer()
+                    .hover(|style| style.bg(theme::surface_hover()))
+                    .on_click(move |_event, _window, cx: &mut gpui::App| {
+                        let step = settings::ActionStep::new(
+                            settings::ActionKind::Url,
+                            url.clone(),
+                        );
+                        let _ = crate::popup::test_run_step(cx, &step);
+                    })
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(theme::accent())
+                            .child(crate::i18n::t("打开下载页")),
+                    )
+                    .into_any_element(),
+            );
+        }
+
         vec![
             section(
                 "关于",
@@ -7756,6 +7866,7 @@ impl SettingsView {
                     info_row("许可", "MIT（可自由使用 / 修改 / 再发布）"),
                 ],
             ),
+            section("更新", "问 GitHub 上的最新 release", update_rows),
             section(
                 "全局快捷键",
                 "在任何应用里按下都会在鼠标处弹出",

@@ -1450,6 +1450,9 @@ pub struct MenuSettings {
     /// 界面语言
     #[serde(default)]
     pub language: Language,
+    /// 进「关于」页时自动检查一次更新
+    #[serde(default = "default_true")]
+    pub check_updates: bool,
     /// 最近运行的记录（新的在前，最多留几十条；显示时再按 limit 截）
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recent_items: Vec<RecentTrack>,
@@ -2075,6 +2078,7 @@ impl MenuSettings {
             recent: RecentSettings::default(),
             autostart: AutostartSettings::default(),
             block: BlockSettings::default(),
+            check_updates: true,
             language: Language::default(),
             recent_items: Vec::new(),
             menu_profile: String::new(),
@@ -4276,15 +4280,29 @@ pub fn item_needs_selection(id: &str) -> bool {
             // 找不到项就别省这一步（宁可慢一点，也不要少传东西）
             return true;
         };
-        if item.append_selection.unwrap_or(settings.append_selection) {
-            return true;
-        }
-        item.actions.iter().any(|step| {
-            // 「运行程序」可能会把选中文件的路径追加到命令行后面
-            step.kind == ActionKind::Run
-                || crate::placeholders::mentions_selection(&step.value)
-        })
+        needs_selection(item, settings.append_selection)
     })
+}
+
+/// 纯逻辑版（方便单测）：这一项跑之前要不要先抓一次选中内容。
+pub fn needs_selection(item: &ItemSetting, global_append: bool) -> bool {
+    // 1) 动作里明确写了 `{selection}` / `%getZz%`：必须抓
+    if item
+        .actions
+        .iter()
+        .any(|step| crate::placeholders::mentions_selection(&step.value))
+    {
+        return true;
+    }
+    // 2) 只有「运行程序」会把选中内容的路径追加到命令行后面，
+    //    所以「接上选中内容」这个开关只在有运行程序时才有意义。
+    //
+    //    以前这里写成「开关开着就抓」——而全局默认就是开着的，于是**每一项**
+    //    按下都白抓一次（发 Ctrl+C + 等剪贴板，最长半秒）。长按快捷键时几次
+    //    抓取叠起来，用户看到的就是「按下去要半天才重复一次」，而且每重复一次
+    //    都往目标窗口里发了一次 Ctrl+C。
+    let has_run = item.actions.iter().any(|step| step.kind == ActionKind::Run);
+    has_run && item.append_selection.unwrap_or(global_append)
 }
 
 /// 某个子菜单的自动生成配置（没开就是 `None`）。
@@ -6364,6 +6382,27 @@ mod tests {
         assert_eq!(settings.items[quit[0]].kind, ItemKind::Submenu);
         // 动作照样留着
         assert!(!settings.items[quit[0]].actions.is_empty());
+    }
+
+    #[test]
+    fn only_run_actions_or_selection_placeholders_need_a_capture() {
+        // 全局「接上选中内容」默认是开的，但它对「发送按键」没有任何意义：
+        // 抓一次要发 Ctrl+C + 等半秒剪贴板，长按快捷键时就是灾难
+        let keys = ItemSetting::item("k", "音量+").action(ActionKind::Keys, "Volume_Up");
+        assert!(!needs_selection(&keys, true));
+        assert!(!needs_selection(&keys, false));
+
+        // 运行程序：开关开着就要抓（要把选中文件的路径拼到命令行后面）
+        let run = ItemSetting::item("r", "记事本").action(ActionKind::Run, "notepad.exe");
+        assert!(needs_selection(&run, true));
+        // 单项关掉了就不抓
+        let mut run_off = run.clone();
+        run_off.append_selection = Some(false);
+        assert!(!needs_selection(&run_off, true));
+
+        // 写了 {selection} 的文本动作：必须抓
+        let text = ItemSetting::item("t", "发出去").action(ActionKind::Text, "选中了：{selection}");
+        assert!(needs_selection(&text, false));
     }
 
     #[test]
