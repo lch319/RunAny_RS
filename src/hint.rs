@@ -292,7 +292,7 @@ pub fn show(cx: &mut App, lines: Vec<HintLine>) {
     if let Some(hwnd) = hwnd {
         // 「可以用鼠标点」= 摘掉穿透；否则保持穿透（挡住点击比不提示还烦）
         win32::set_click_through(hwnd, !cfg.hint_clickable);
-        win32::resize_window(hwnd, width, height, scale);
+        win32::fit_client_size(hwnd, width, height, scale);
         win32::move_window(
             hwnd,
             win32::px_to_physical(x - crate::layout::FRAME_INSET, scale),

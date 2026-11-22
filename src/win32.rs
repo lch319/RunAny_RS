@@ -647,6 +647,50 @@ mod imp {
         };
     }
 
+    /// 把客户区做到**至少** `width × height` 逻辑像素。
+    ///
+    /// 不靠「按 DPI 换算一次就完事」：175% 这种小数缩放下取整、非客户区的圆角
+    /// 阴影、窗口刚建好时的 DPI 切换，每一样都可能让它差几个像素 —— 差的那几个
+    /// 像素正好把最后一行文字切掉（悬停提示「文字被裁一半、卡片尺寸不对」）。
+    ///
+    /// 做法：设一次 → **读回真实客户区** → 不够就按差值再设。最多三轮，收敛就停。
+    pub fn fit_client_size(hwnd: isize, width: f32, height: f32, scale: f32) {
+        if hwnd == 0 {
+            return;
+        }
+        unsafe {
+            let hwnd = hwnd as HWND;
+            // 客户区 → 窗口矩形要加回那圈非客户区，厚度按当前窗口量
+            let mut window = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            let mut client = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            GetWindowRect(hwnd, &mut window);
+            GetClientRect(hwnd, &mut client);
+            let extra_w = (window.right - window.left) - (client.right - client.left);
+            let extra_h = (window.bottom - window.top) - (client.bottom - client.top);
+
+            let mut scale = window_scale(hwnd as isize).unwrap_or(scale).max(0.5);
+            for _ in 0..3 {
+                let want_w = (width * scale).ceil() as i32;
+                let want_h = (height * scale).ceil() as i32;
+                SetWindowPos(
+                    hwnd,
+                    std::ptr::null_mut(),
+                    0,
+                    0,
+                    want_w + extra_w,
+                    want_h + extra_h,
+                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+                let (got_w, got_h) = client_size(hwnd as isize).unwrap_or((0, 0));
+                if got_w >= want_w && got_h >= want_h {
+                    return;
+                }
+                // 窗口的 DPI 是摆上去之后才定下来的：重读一次再补
+                scale = window_scale(hwnd as isize).unwrap_or(scale).max(0.5);
+            }
+        }
+    }
+
     /// 客户区尺寸（物理像素）。判断「窗口是不是真的变成了我们要的高度」用。
     ///
     /// `window.resize()` 只是**请求**，系统那一侧可能因为窗口刚显示、正被
@@ -3440,7 +3484,7 @@ pub use imp::{
     process_ids, top_windows, activate_or_minimize, close_window, launch_as, split_command,
     monitor_off, empty_recycle_bin, ahk_from_registry,
     make_click_through, set_click_through,
-    resize_window, work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
+    resize_window, fit_client_size, work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
     cancel_ime_composition, cancel_ime_composition_in, place_ime_in,
 };
@@ -3906,6 +3950,9 @@ pub fn http_get(_url: &str, _timeout_ms: u32) -> Result<(u16, String), String> {
 pub fn window_scale(_hwnd: isize) -> Option<f32> {
     None
 }
+
+#[cfg(not(windows))]
+pub fn fit_client_size(_hwnd: isize, _width: f32, _height: f32, _scale: f32) {}
 
 #[cfg(not(windows))]
 pub fn is_elevated() -> bool {

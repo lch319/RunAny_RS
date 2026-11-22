@@ -1866,7 +1866,7 @@ fn place(
         // 可见窗口一律交给 `window.resize()`：它排进 executor 之后由 GPUI 自己
         // `SetWindowPos`，WM_SIZE 走的是它认得的那条路，viewport 会跟着改。
         if was_hidden {
-            win32::resize_window(hwnd, width, height, scale);
+            win32::fit_client_size(hwnd, width, height, scale);
         }
         if was_hidden {
             win32::set_window_opacity(hwnd, 0.0);
@@ -2076,7 +2076,7 @@ fn create_slot(
         // GPUI 建窗走 `CW_USEDEFAULT`，我们给的 bounds 这时还没落到窗口上 ——
         // 真实窗口是「整块屏幕」那么大（一张 1424×744 的交换链 + 缓冲 ≈ 8 MB）。
         // 趁它还没显示、还没画过，先收成目标尺寸（预热路径就只剩一个小方块）。
-        win32::resize_window(hwnd, width, height, scale);
+        win32::fit_client_size(hwnd, width, height, scale);
         // 不透明度不在这里管：预热路径下面自己会设，正常路径由 `place()` 负责
         // （显示前 alpha=0 → 画好第一帧 → 再恢复），任何中间帧都不会露给用户。
         if at.is_none() {

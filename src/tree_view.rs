@@ -153,6 +153,8 @@ const DRAG_SLOP: f32 = 10.0;
 struct DragItem {
     from: Vec<usize>,
     hover: Option<settings::DropTarget>,
+    /// 悬停在某个**收起**的子菜单上多久了（拖过去停一下要自动展开）
+    dwell: Option<(String, std::time::Instant)>,
 }
 
 /// 从资源管理器拖进来、还没决定「运行程序」那一栏写什么的一批文件。
@@ -1557,14 +1559,44 @@ impl gpui::Render for TreeView {
                     if dx * dx + dy * dy > DRAG_SLOP * DRAG_SLOP {
                         let from = press.path.clone();
                         this.press = None;
-                        this.drag = Some(DragItem { from, hover: None });
+                        this.drag = Some(DragItem { from, hover: None, dwell: None });
                     }
                 }
                 if let Some(from) = this.drag.as_ref().map(|drag| drag.from.clone()) {
                     let rows = this.rows();
                     let hover = this.drop_target(f32::from(event.position.y), &from, &rows);
+                    // 悬停在**收起的子菜单**上停一会儿就展开它（资源管理器的手感）：
+                    // 想放进子菜单里就拖过去停一下，不想放就别停
+                    let dwell_target = match &hover {
+                        Some(settings::DropTarget::Before(path))
+                        | Some(settings::DropTarget::After(path)) => {
+                            let key = path_key(path);
+                            rows.iter()
+                                .find(|row| path_key(&row.path) == key)
+                                .filter(|row| row.has_children)
+                                .map(|row| row.id.clone())
+                        }
+                        _ => None,
+                    };
+                    let mut expand_now: Option<String> = None;
                     if let Some(drag) = this.drag.as_mut() {
                         drag.hover = hover;
+                        match (&dwell_target, &drag.dwell) {
+                            (Some(id), Some((dwell_id, at))) if id == dwell_id => {
+                                if at.elapsed() >= std::time::Duration::from_millis(600)
+                                    && !this.expanded.contains(id)
+                                {
+                                    expand_now = Some(id.clone());
+                                }
+                            }
+                            (Some(id), _) => {
+                                drag.dwell = Some((id.clone(), std::time::Instant::now()));
+                            }
+                            (None, _) => drag.dwell = None,
+                        }
+                    }
+                    if let Some(id) = expand_now {
+                        this.expanded.insert(id);
                     }
                     cx.notify();
                 }
