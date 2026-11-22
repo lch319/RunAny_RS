@@ -1,0 +1,16 @@
+# 构建产物
+/target
+dist/
+**/*.rs.bk
+
+# 运行期生成的配置（每台机器都不一样，不该进仓库）
+/settings.json
+/menus/
+/Icon/
+/program-fixes.json
+
+# 日志 / 临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

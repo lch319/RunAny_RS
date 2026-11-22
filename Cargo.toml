@@ -1,0 +1,112 @@
+[package]
+name = "runany_rs"
+version = "0.1.0"
+edition = "2021"
+description = "RunAny_RS —— Rust + GPUI 的全局快捷键弹出式（级联）菜单"
+license = "MIT"
+
+[[bin]]
+name = "RunAny_RS"
+path = "src/main.rs"
+
+[dependencies]
+# GPUI 由 Zed Industries 维护，0.2.x 系列已经发布到 crates.io
+gpui = "0.2"
+# 用于把后台线程的快捷键事件送进 GPUI 的 async 世界
+async-channel = "2"
+# 设置界面里的输入框：按「字形簇」移动光标（和 gpui 自带示例一致）
+unicode-segmentation = "1"
+# 设置持久化到 exe 同目录的 settings.json
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 「一键直达」按正则匹配选中内容；「生效条件」里的通配也编译成正则（不开 unicode 以外的特性）
+regex = "1"
+# 菜单项的图标位要能读 png / ico 这类位图（gpui 自带的 ImageFormat 不含 ico，
+# 这里直接解码成像素再交给 gpui 画；版本和 gpui 自己依赖的一致，不会多编一份）
+image = "0.25"
+
+# 仅 Windows 需要：
+# - 读光标全局坐标、EnumWindows 找窗口、SetWindowPos 移动窗口
+# - DwmSetWindowAttribute 让 DWM 给窗口裁圆角
+[target.'cfg(windows)'.dependencies]
+# 从 gpui 的窗口拿到原生 HWND（取消输入法组字要用它）
+raw-window-handle = "0.6"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    # 托盘图标（Shell_NotifyIconW）+ 从 exe / lnk 里抠图标（ExtractIconExW / SHGetFileInfoW）
+    "Win32_UI_Shell",
+    "Win32_UI_Input_KeyboardAndMouse",
+    # 热字符串：低层键盘钩子 + 判断输入法是不是开着（开着就不记字母，免得把拼音当字符）
+    "Win32_UI_Input_Ime",
+    "Win32_UI_Controls_Dialogs",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemInformation",
+    # 「禁用应用」名单：按窗口取进程 exe 名（OpenProcess + QueryFullProcessImageNameW）
+    "Win32_System_Threading",
+    # Everything 联动：进程快照看 Everything.exe 在不在运行（随程序启动用）
+    "Win32_System_Diagnostics_ToolHelp",
+    # SHGetFileInfoW 的签名里带 FILE_FLAGS_AND_ATTRIBUTES
+    "Win32_Storage_FileSystem",
+    # 剪贴板快照 / 还原（弹出菜单前抓选中内容，抓完要把剪贴板放回去）
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    # 导入 RunAny.ini 时把 ANSI（GBK）文本转成 UTF-8
+    "Win32_Globalization",
+    # 动作库：读注册表里的 AutoHotkey 路径 + 生成随机密码/UUID
+    "Win32_System_Registry",
+    "Win32_Security_Cryptography",
+] }
+
+# ============================================================================
+# 编译速度约定（2026-11-21 起）
+#
+# 以前 release 用 lto="fat" + codegen-units=1 + incremental=false，
+# 结果**改一行也要 36 分钟**：fat LTO 会把整个依赖图的 IR 重新内联一遍，
+# 而且 codegen-units=1 让代码生成完全串行。日常迭代绝对不能这么编。
+#
+# 现在拆成两个 profile：
+#   cargo build --release            -> 日常自测/调试（1~3 分钟）
+#   cargo build --profile dist       -> 发版打包（才算 fat LTO，慢但最小）
+#
+# 自测/发版都建议：cargo test --release / cargo build --release
+# ============================================================================
+
+# 日常迭代：opt-level=2 关 LTO，16 个 codegen 单元并行，开增量。
+# 产物比 dist 大约 1~1.5 MB，但增量重编译只要几分钟。
+[profile.release]
+opt-level = 2
+lto = false
+codegen-units = 16
+panic = "abort"
+strip = "debuginfo"
+incremental = true
+
+# 发版：一个 exe 拷走就能跑，体积按「能压到多小就多小」来调。
+#
+# - `opt-level = "z"`      ：优先优化体积（不是 "s"，"z" 更狠）
+# - `lto = "fat"`          ：跨 crate 内联 + 死代码消除，gpui 这类大型依赖收益最大
+# - `codegen-units = 1`    ：让 LTO 看到全部代码（编译慢，产物小）
+# - `panic = "abort"`      ：不生成 unwind 表（gpui 只在测试里用 catch_unwind，安全）
+# - `strip = "symbols"`    ：去掉符号表和调试信息
+# - `incremental = false`  ：增量编译会留下额外数据
+[profile.dist]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+incremental = false
+
+# dev（cargo check / 编辑器）：依赖也从 opt-level=3 降到 1。
+# gpui + image 的依赖图在 opt-level=3 下光编 dev 依赖就要一个多小时，
+# 降到 1 只影响运行帧率，不影响正确性；真要跑性能请用 --release。
+[profile.dev]
+opt-level = 1
+incremental = true
+
+[profile.dev.package."*"]
+opt-level = 1

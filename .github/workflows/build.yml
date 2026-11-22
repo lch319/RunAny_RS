@@ -1,0 +1,29 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: 编译
+        run: cargo build --release
+      - name: 测试
+        run: cargo test
+      - name: 打包
+        run: |
+          mkdir -p dist
+          cp target/release/RunAny_RS.exe dist/
+          cp third_party/everything-sdk/Everything64.dll dist/
+          cd dist && 7z a ../RunAny_RS-win64.zip * || tar -a -cf ../RunAny_RS-win64.zip *
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RunAny_RS-win64
+          path: RunAny_RS-win64.zip
