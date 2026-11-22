@@ -4234,7 +4234,42 @@ impl SettingsView {
         );
 
         // 解释器放在最上面：它是「先决条件」，筛完动作才发现没装解释器最烦
-        vec![interpreters, browser]
+        // ---- 「发送文本」的两种模式（动作本身在菜单项里配，这里定默认行为）
+        let (escapes, paste) = settings::read(|settings| {
+            (settings.send_text_escapes, settings.send_text_paste)
+        });
+        let send_text = section(
+            "发送文本",
+            "动作里的「发送文本」怎么把内容送进目标程序",
+            vec![
+                toggle_row(
+                    "认识 {Enter} {Tab} {Backspace} 这类记号",
+                    "关掉之后 `{Enter}` 就真的打成「{Enter}」这六个字符（发代码片段 / 模板时有用）",
+                    escapes,
+                    cx.listener(|_this, _: &ClickEvent, window, cx| {
+                        settings::update(cx, |settings| {
+                            settings.send_text_escapes = !settings.send_text_escapes;
+                        });
+                        window.refresh();
+                        cx.notify();
+                    }),
+                ),
+                toggle_row(
+                    "用剪贴板粘贴（默认关闭）",
+                    "直接注入在终端 / 部分 Electron 应用里会被拦，改走剪贴板更稳。执行时先备份、粘贴完再还原，不弄脏你的剪贴板；但原来如果是图片 / 文件，只能还原成空",
+                    paste,
+                    cx.listener(|_this, _: &ClickEvent, window, cx| {
+                        settings::update(cx, |settings| {
+                            settings.send_text_paste = !settings.send_text_paste;
+                        });
+                        window.refresh();
+                        cx.notify();
+                    }),
+                ),
+            ],
+        );
+
+        vec![interpreters, browser, send_text]
     }
 
     fn category_chip(

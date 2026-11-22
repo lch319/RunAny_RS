@@ -1231,8 +1231,19 @@ fn execute_step(cx: &mut App, step: &ActionStep, append_selection: bool) -> Resu
             if value.is_empty() {
                 return Ok(());
             }
-            // 认识 `{Enter}` `{Tab}` `{Backspace}` 这类记号（`{{` 打一个大括号）
-            win32::send_text_with_keys(value)
+            let (paste, escapes) = settings::read(|settings| {
+                (settings.send_text_paste, settings.send_text_escapes)
+            });
+            if paste {
+                // 剪贴板粘贴：稳，能进长文本；执行完会把剪贴板还原
+                win32::paste_text(value)
+            } else if escapes {
+                // 认识 `{Enter}` `{Tab}` `{Backspace}` 这类记号（`{{` 打一个大括号）
+                win32::send_text_with_keys(value)
+            } else {
+                // 关掉记号：`{Enter}` 就是这六个字符，原样打出去
+                win32::send_text(value)
+            }
         }
         ActionKind::Builtin => {
             // 老配置里的 9 个内置动作（open-settings / quit …）还要能跑

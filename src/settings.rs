@@ -1384,6 +1384,18 @@ pub struct MenuSettings {
     /// 局部优先级高于这里）
     #[serde(default)]
     pub append_selection: bool,
+    /// 「发送文本」认识 `{Enter}` `{Tab}` `{Backspace}` 这类按键记号（默认开）。
+    ///
+    /// 关掉之后 `{Enter}` 就真的打成「{Enter}」这六个字符 —— 有些人要发代码片段、
+    /// 模板文本，里面的花括号不该被吃掉。
+    #[serde(default = "default_true")]
+    pub send_text_escapes: bool,
+    /// 「发送文本」改成**剪贴板粘贴**（默认关）。
+    ///
+    /// 直接注入在某些程序里会被拦（终端、部分 Electron 应用、输入法），
+    /// 走剪贴板粘一次最稳。执行时会备份、粘贴、再把原来的剪贴板还原。
+    #[serde(default)]
+    pub send_text_paste: bool,
     /// 多选文件时，「这几项要求的后缀」怎么算命中
     pub multi_file_rule: MultiFileRule,
     /// 「把选中的文件加到菜单里」时路径写成什么样（每次问 / 总是完整 / 总是裸名）
@@ -2068,6 +2080,8 @@ impl MenuSettings {
             selection_wait_ms: 500,
             context_filter: true,
             append_selection: true,
+            send_text_escapes: true,
+            send_text_paste: false,
             multi_file_rule: MultiFileRule::AllSame,
             add_selection_path: crate::selection::AddSelectionPath::default(),
             popup_hotkey: DEFAULT_POPUP_HOTKEY.to_string(),

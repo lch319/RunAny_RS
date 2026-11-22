@@ -1508,6 +1508,28 @@ mod imp {
     ///   `{Ctrl+S}` 这类 → 当成按键按一下
     /// - `{{` → 一个字面的 `{`；`}}` → 一个字面的 `}`
     /// - 认不出来的 `{xxx}` **原样保留**（宁可打出大括号，也不能把内容吃掉）
+    /// 用剪贴板粘贴：写剪贴板 → `Ctrl+V` → 等它粘完 → **还原原来的剪贴板**。
+    ///
+    /// 为什么不直接用 `send_text`：终端、部分 Electron 应用（VS Code 终端、
+    /// 某些聊天工具）不吃 Unicode 注入，但一定吃 `Ctrl+V`。
+    ///
+    /// 还原只做到「文本」这一层：原来剪贴板里是图片 / 文件的话还原不回去
+    /// （只能清空），这一点在设置页的提示里写清楚了。
+    pub fn paste_text(text: &str) -> Result<(), String> {
+        let previous = read_clipboard_text();
+        write_clipboard_text(text);
+        // 剪贴板写入也是异步生效的，等它稳一下再按 Ctrl+V
+        std::thread::sleep(std::time::Duration::from_millis(25));
+        let sent = send_keys("Ctrl+V");
+        // 给目标程序留出真正粘贴的时间，然后还原，别污染用户的剪贴板
+        std::thread::sleep(std::time::Duration::from_millis(220));
+        match previous {
+            Some(old) => write_clipboard_text(&old),
+            None => write_clipboard_text(""),
+        }
+        sent
+    }
+
     pub fn send_text_with_keys(text: &str) -> Result<(), String> {
         let mut literal = String::new();
         let mut chars = text.chars().peekable();
@@ -3649,7 +3671,7 @@ pub use imp::{
     process_ids, top_windows, activate_or_minimize, close_window, launch_as, split_command,
     monitor_off, empty_recycle_bin, ahk_from_registry,
     make_click_through, set_click_through,
-    resize_window, fit_client_size, ime_composition_len, send_text_with_keys,
+    resize_window, fit_client_size, ime_composition_len, send_text_with_keys, paste_text,
     work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
     cancel_ime_composition, cancel_ime_composition_in, place_ime_in,
@@ -4128,6 +4150,11 @@ pub fn ime_composition_len(_hwnd: isize) -> usize {
 #[cfg(not(windows))]
 pub fn send_text_with_keys(text: &str) -> Result<(), String> {
     Err(format!("只有 Windows 支持：{text}"))
+}
+
+#[cfg(not(windows))]
+pub fn paste_text(_text: &str) -> Result<(), String> {
+    Err("只有 Windows 支持".to_string())
 }
 
 #[cfg(not(windows))]
