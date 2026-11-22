@@ -236,6 +236,12 @@ pub fn parse_png_size(bytes: &[u8]) -> Option<(u32, u32)> {
 
 #[cfg(windows)]
 mod imp {
+    #[link(name = "user32")]
+    extern "system" {
+        #[link_name = "GetDpiForWindow"]
+        fn dpi_for_window(hwnd: HWND) -> u32;
+    }
+
     #[link(name = "winhttp")]
     extern "system" {
         fn WinHttpOpen(
@@ -624,13 +630,18 @@ mod imp {
             GetClientRect(hwnd, &mut client);
             let extra_w = (window.right - window.left) - (client.right - client.left);
             let extra_h = (window.bottom - window.top) - (client.bottom - client.top);
+            // **向上取整**：`round` 在 175% 这类小数缩放下会少算零点几个逻辑像素，
+            // 客户区就比内容矮一丢丢 —— 最后一行文字被裁掉一截（悬停提示在 175%
+            // 下「显示不全」就是这么来的）。宁可多一个物理像素，也不能切字。
+            let physical_width = (width * scale).ceil() as i32;
+            let physical_height = (height * scale).ceil() as i32;
             SetWindowPos(
                 hwnd,
                 std::ptr::null_mut(),
                 0,
                 0,
-                super::px_to_physical(width, scale) + extra_w,
-                super::px_to_physical(height, scale) + extra_h,
+                physical_width + extra_w,
+                physical_height + extra_h,
                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
             )
         };
@@ -3279,6 +3290,18 @@ mod imp {
         }
     }
 
+    /// 这扇窗口**自己**的缩放比（96 DPI = 1.0）。
+    ///
+    /// 多显示器时各块屏的缩放可能不一样；提示窗口是在光标那块屏上建的，
+    /// 拿主窗口的缩放去算尺寸就会错位、裁字。
+    pub fn window_scale(hwnd: isize) -> Option<f32> {
+        if hwnd == 0 {
+            return None;
+        }
+        let dpi = unsafe { dpi_for_window(hwnd as HWND) };
+        (dpi > 0).then(|| dpi as f32 / 96.0)
+    }
+
     /// 开机以来经过的毫秒数（AHK 的 `A_TickCount` 同一个口径）。
     pub fn system_uptime_ms() -> u64 {
         use windows_sys::Win32::System::SystemInformation::GetTickCount64;
@@ -3408,7 +3431,7 @@ pub use imp::{
     watch_foreground, window_process_id,
     process_name_of_window, input_context, preview_context, context_of_window,
     foreground_process_name, window_at_cursor, selection_target,
-    system_uptime_ms, is_elevated, kill_other_instances, http_get,
+    system_uptime_ms, is_elevated, kill_other_instances, http_get, window_scale,
     install_input_hooks, set_key_gate, set_mouse_gate, numlock_on, press_numlock,
     modifier_state, click_tick, send_backspaces, send_virtual_key,
     ime_composing, caret_rect,
@@ -3877,6 +3900,11 @@ pub fn kill_other_instances() -> usize {
 #[cfg(not(windows))]
 pub fn http_get(_url: &str, _timeout_ms: u32) -> Result<(u16, String), String> {
     Err("只有 Windows 支持".to_string())
+}
+
+#[cfg(not(windows))]
+pub fn window_scale(_hwnd: isize) -> Option<f32> {
+    None
 }
 
 #[cfg(not(windows))]

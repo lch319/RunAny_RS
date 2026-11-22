@@ -63,8 +63,60 @@ struct Rule {
     expand: String,
     /// 提示第二行：启动的完整路径（没有就是空串）
     path: String,
-    /// 一匹配就执行，不等结束字符（AHK 的 `*`）
+    /// 一匹配就执行，不等结束字符（这一项自己的开关）
     now: bool,
+    /// `:C:` —— 这一条区分大小写（AHK 默认不区分）
+    case_sensitive: bool,
+    /// `:*:` —— 不用结束字符，敲完最后一个字母就触发
+    no_end_char: bool,
+    /// `:?:` —— 词中间也触发（默认要求缓冲区从头就是这个短语）
+    inside_word: bool,
+    /// `:O:` —— 不把结束字符（空格 / 回车…）跟着打出去
+    omit_end: bool,
+    /// `:B0:` —— 不删掉已经敲进去的触发词
+    no_backspace: bool,
+}
+
+/// AHK 的 `:选项:` 解析结果。
+#[derive(Clone, Copy, Default, Debug)]
+struct Flags {
+    case_sensitive: bool,
+    no_end_char: bool,
+    inside_word: bool,
+    omit_end: bool,
+    no_backspace: bool,
+}
+
+/// 解析 AHK 的 `:选项:短语::` 写法。
+///
+/// 支持的选项（大小写都认）：`C` 区分大小写、`*` 不用结束字符、`?` 词中间也触发、
+/// `O` 不把结束字符打出去、`B0` 不删除触发词。
+/// `R` / `T` / `SI` / `SP` / `B` 接受但不改变行为 —— 我们本来就是直接注入文本，
+/// 不经过剪贴板，也没有「发送模式」的差别。
+fn parse_syntax(raw: &str) -> (Flags, String) {
+    let mut flags = Flags::default();
+    let text = raw.trim();
+    let Some(rest) = text.strip_prefix(':') else {
+        // 也接受 `ftw::` 这种只带结尾的写法
+        return (flags, text.trim_end_matches("::").trim().to_string());
+    };
+    let Some((options, tail)) = rest.split_once(':') else {
+        return (flags, text.to_string());
+    };
+    let upper = options.to_ascii_uppercase();
+    for ch in upper.chars() {
+        match ch {
+            'C' => flags.case_sensitive = true,
+            '*' => flags.no_end_char = true,
+            '?' => flags.inside_word = true,
+            'O' => flags.omit_end = true,
+            _ => {}
+        }
+    }
+    if upper.contains("B0") {
+        flags.no_backspace = true;
+    }
+    (flags, tail.trim_end_matches("::").trim().to_string())
 }
 
 /// 一次同步编译出来的全部规则 + 全局参数。
@@ -254,11 +306,12 @@ fn compile(
     now: bool,
     case_sensitive: bool,
 ) -> Option<Rule> {
-    let text = text.trim();
+    let (flags, text) = parse_syntax(text);
+    let text = text.as_str();
     if text.is_empty() {
         return None;
     }
-    let key = fold(text, case_sensitive);
+    let key = fold(text, case_sensitive || flags.case_sensitive);
     let (expand, path) = settings::read(|settings| {
         let Some(item) = settings.find_path(id).and_then(|path| settings.node(&path)) else {
             return (String::new(), String::new());
@@ -273,6 +326,11 @@ fn compile(
         expand,
         path,
         now,
+        case_sensitive: flags.case_sensitive,
+        no_end_char: flags.no_end_char,
+        inside_word: flags.inside_word,
+        omit_end: flags.omit_end,
+        no_backspace: flags.no_backspace,
     })
 }
 
@@ -614,7 +672,7 @@ fn on_key(key: RawKey) -> bool {
             };
             match hit {
                 Some(rule) => {
-                    fire_hit(rule.id.clone(), Some(Replay::Key(key.vk)));
+                    fire_hit(rule, Some(Replay::Key(key.vk)));
                     return true;
                 }
                 None => {
@@ -672,7 +730,7 @@ fn on_key(key: RawKey) -> bool {
             // 都会排在这个空格**前面**落地，结果就是 `hello F ree the whales`
             // —— 用户敲的空格插进了替换文本中间。吞掉之后顺序完全由我们决定：
             // 先退格删掉触发词，再打替换文本，最后把这个结束字符补回去。
-            fire_hit(rule.id.clone(), Some(Replay::Char(ch)));
+            fire_hit(rule, Some(Replay::Char(ch)));
             return true;
         }
         if let Ok(typed) = TYPED.lock() {
@@ -697,7 +755,7 @@ fn on_key(key: RawKey) -> bool {
     // 敲完就执行（见 `auto_hit`）：这个键**还没送到目标程序**（钩子跑在它前面），
     // 所以直接吞掉它、退格删掉「已经落地的那些字符」就行。
     if let Some(rule) = auto_hit(&config, &prefix) {
-        fire_hit(rule.id.clone(), None);
+        fire_hit(rule, None);
         return true;
     }
     if !config.hide_hint {
@@ -743,8 +801,12 @@ fn measured_screen() -> Option<usize> {
 /// 组字区里的拼音挡在前面，退格删的是拼音，屏幕上的字一个都不会少
 /// （这就是以前「只删掉三个 1、`@win` 还留着」的根源）。交给 UI 线程先让输入法
 /// 丢掉这段组字，再按屏幕字符数退格。
-fn fire_hit(id: String, replay: Option<Replay>) {
+fn fire_hit(rule: &Rule, replay: Option<Replay>) {
+    let id = rule.id.clone();
+    // `:O:` 不把结束字符跟着打出去；`:B0:` 不删已经敲进去的触发词
+    let replay = if rule.omit_end { None } else { replay };
     let (screen, composing) = take_screen();
+    let screen = if rule.no_backspace { 0 } else { screen };
     // 光标位移是实测值，比按物理键推算准（输入法选候选会吃掉/合并字符）
     let measured = measured_screen();
     let screen = measured.unwrap_or(screen);
@@ -828,6 +890,17 @@ fn match_rule<'a>(config: &'a Config, typed: &str) -> Option<&'a Rule> {
     if typed.is_empty() {
         return None;
     }
+    // 逐条判断：`:C:` 的那几条按原样比，`:?:` 的那几条允许出现在词中间
+    if let Some(rule) = config.rules.iter().find(|rule| {
+        let hay = fold(typed, config.case_sensitive || rule.case_sensitive);
+        if rule.inside_word {
+            hay.ends_with(&rule.key)
+        } else {
+            hay == rule.key
+        }
+    }) {
+        return Some(rule);
+    }
     let hay = fold(typed, config.case_sensitive);
     // 要求**整个缓冲区**就是这个短语，而不是「以它结尾」。
     //
@@ -850,6 +923,7 @@ fn match_rule<'a>(config: &'a Config, typed: &str) -> Option<&'a Rule> {
 fn auto_hit<'a>(config: &'a Config, typed: &str) -> Option<&'a Rule> {
     match_rule(config, typed).filter(|rule| {
         rule.now
+            || rule.no_end_char
             || config.immediate
             || rule.text.chars().any(|ch| !ch.is_ascii_alphabetic())
     })
@@ -1119,6 +1193,44 @@ fn key_char(key: RawKey) -> Option<char> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn ahk_option_syntax_is_parsed() {
+        use super::parse_syntax;
+
+        // 不带选项：原样就是短语
+        let (flags, text) = parse_syntax("ftw");
+        assert_eq!(text, "ftw");
+        assert!(!flags.case_sensitive && !flags.no_end_char && !flags.inside_word);
+
+        // `:C:BTW::` —— 区分大小写
+        let (flags, text) = parse_syntax(":C:BTW::");
+        assert_eq!(text, "BTW");
+        assert!(flags.case_sensitive);
+
+        // `:*:ftw::` —— 不用结束字符
+        let (flags, text) = parse_syntax(":*:ftw::");
+        assert_eq!(text, "ftw");
+        assert!(flags.no_end_char);
+
+        // 多个选项一起写，大小写都认
+        let (flags, text) = parse_syntax(":c*o?b0:abc");
+        assert_eq!(text, "abc");
+        assert!(flags.case_sensitive);
+        assert!(flags.no_end_char);
+        assert!(flags.omit_end);
+        assert!(flags.no_backspace);
+
+        // `:?:` 词中间也触发；结尾的 `::` 可以省略
+        let (flags, text) = parse_syntax(":?:btw");
+        assert_eq!(text, "btw");
+        assert!(flags.inside_word);
+
+        // 只有收尾 `::` 的写法
+        let (flags, text) = parse_syntax("ftw::");
+        assert_eq!(text, "ftw");
+        assert!(!flags.no_end_char);
+    }
+
     fn config(rules: &[(&str, &str)], end: &str) -> Config {
         config_with(rules, end, &[])
     }
@@ -1136,6 +1248,11 @@ mod tests {
                     expand: String::new(),
                     path: String::new(),
                     now: now.contains(text),
+                    case_sensitive: false,
+                    no_end_char: false,
+                    inside_word: false,
+                    omit_end: false,
+                    no_backspace: false,
                 })
                 .collect(),
             end: end.chars().collect(),

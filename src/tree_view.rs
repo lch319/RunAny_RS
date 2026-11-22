@@ -519,12 +519,17 @@ impl TreeView {
                 settings::DropTarget::After(path)
             });
         }
-        if ratio < 0.28 {
+        // 拖到别的行上**只调顺序**，不再「拖进中间就变成它的子菜单」。
+        //
+        // 原来行中间 28%~72% 那块是 `Into`（变成子菜单），可用户拖着拖着就从
+        // 旁边划过一行，一不小心整块被塞进别人肚子里，看着像「菜单项全乱了」。
+        // 要建子菜单有专门的按钮（「添加子菜单」），拖拽只负责挪位置。
+        //
+        // 分界放在 40%：偏上＝插到它前面，剩下大半都算「插到它后面」。
+        if ratio < 0.4 {
             Some(settings::DropTarget::Before(path))
-        } else if ratio > 0.72 {
-            Some(settings::DropTarget::After(path))
         } else {
-            Some(settings::DropTarget::Into(path))
+            Some(settings::DropTarget::After(path))
         }
     }
 

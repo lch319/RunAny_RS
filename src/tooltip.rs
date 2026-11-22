@@ -543,6 +543,9 @@ fn show(cx: &mut App, id: &str) {
         // **不用 `window.resize()`**：它内部那次 `SetWindowPos` 没带
         // `SWP_NOACTIVATE`，会把提示自身抢成前台，菜单 watchdog 立刻判定
         // 「用户点走了」把整张菜单收掉（实测必现）。这里改用不激活的那版。
+        // 用**这扇提示窗口**的实际 DPI（而不是主窗口的）：多屏不同缩放、
+        // 或者系统是 175% 这种小数缩放时，拿错比例就会少算几个像素、最后一行被裁
+        let scale = win32::window_scale(hwnd).unwrap_or(scale);
         win32::resize_window(hwnd, width, height, scale);
         win32::move_window(
             hwnd,
