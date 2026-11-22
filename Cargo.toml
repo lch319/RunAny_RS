@@ -82,7 +82,10 @@ lto = false
 codegen-units = 16
 panic = "abort"
 strip = "debuginfo"
-incremental = true
+# 关掉增量编译：它会把每个 crate 的旧对象留在 `target/release/incremental` 里，
+# 一旦构建被杀（工具超时、Ctrl+C），下一次链接就会混进旧代码生成的对象，
+# 报一堆 `LNK2019 无法解析的外部符号 …llvm.…`（真踩过）。代价只是重编慢一点。
+incremental = false
 
 # 发版：一个 exe 拷走就能跑，体积按「能压到多小就多小」来调。
 #

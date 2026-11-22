@@ -1284,6 +1284,7 @@ mod tests {
             case_sensitive: false,
             hint_after: 3,
             hint_path_chars: 10,
+            ime_match: false,
             hide_hint: false,
             immediate: false,
         }

@@ -2536,6 +2536,40 @@ mod imp {
         }
     }
 
+    /// 组字区里现在有几个字符（0 = 没在组字）。
+    ///
+    /// 取消组字是**异步**的：`ImmNotifyIME(CPS_CANCEL)` 发出去之后输入法还要
+    /// 转一圈才真把组字窗收掉。这段空档里注入的文本会被它当成拼音吃掉，
+    /// 所以要能问「现在还在不在组字」。
+    pub fn ime_composition_len(hwnd: isize) -> usize {
+        use windows_sys::Win32::UI::Input::Ime::{
+            ImmGetCompositionStringW, ImmGetContext, ImmReleaseContext, GCS_COMPSTR,
+        };
+        use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+        if hwnd == 0 {
+            return 0;
+        }
+        unsafe {
+            let thread = GetWindowThreadProcessId(hwnd as HWND, std::ptr::null_mut());
+            let me = GetCurrentThreadId();
+            let attached = thread != 0 && thread != me && AttachThreadInput(me, thread, 1) != 0;
+            let ctx = ImmGetContext(hwnd as HWND);
+            let mut len = 0usize;
+            if !ctx.is_null() {
+                // 返回字节数（宽字符）：负数表示出错
+                let bytes = ImmGetCompositionStringW(ctx, GCS_COMPSTR, std::ptr::null_mut(), 0);
+                if bytes > 0 {
+                    len = (bytes as usize) / 2;
+                }
+                ImmReleaseContext(hwnd as HWND, ctx);
+            }
+            if attached {
+                AttachThreadInput(me, thread, 0);
+            }
+            len
+        }
+    }
+
     /// 把输入法的**组字窗 / 候选窗**挪到窗口客户区的 `(x, y)`（物理像素）。
     ///
     /// 为什么要自己设：gpui 只在 `WM_IME_STARTCOMPOSITION` 时上报一次光标位置，
@@ -3484,7 +3518,7 @@ pub use imp::{
     process_ids, top_windows, activate_or_minimize, close_window, launch_as, split_command,
     monitor_off, empty_recycle_bin, ahk_from_registry,
     make_click_through, set_click_through,
-    resize_window, fit_client_size, work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
+    resize_window, fit_client_size, ime_composition_len, work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
     cancel_ime_composition, cancel_ime_composition_in, place_ime_in,
 };
@@ -3953,6 +3987,11 @@ pub fn window_scale(_hwnd: isize) -> Option<f32> {
 
 #[cfg(not(windows))]
 pub fn fit_client_size(_hwnd: isize, _width: f32, _height: f32, _scale: f32) {}
+
+#[cfg(not(windows))]
+pub fn ime_composition_len(_hwnd: isize) -> usize {
+    0
+}
 
 #[cfg(not(windows))]
 pub fn is_elevated() -> bool {

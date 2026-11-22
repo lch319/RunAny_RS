@@ -1064,11 +1064,39 @@ pub fn run_hotstring(
         // 输入法的上下文挂在**拿到焦点的那个控件**上（浏览器、编辑器都是这样），
         // 只在顶层窗口上取消是取消不掉的
         let target = crate::win32::input_target();
-        crate::win32::cancel_ime_composition(if target.1 != 0 { target.1 } else { target.0 });
-        // 输入法收组字窗是异步的，稍微等一下再退格，否则退格会被它当成删拼音
-        std::thread::sleep(std::time::Duration::from_millis(25));
+        let hwnd = if target.1 != 0 { target.1 } else { target.0 };
+        if std::env::var_os("GPUI_MENU_DEBUG_HS").is_some() {
+            eprintln!(
+                "[hs] 取消组字前 composition={} 要退格={count}",
+                crate::win32::ime_composition_len(hwnd)
+            );
+        }
+        // 先按一下 Esc：输入法收到 Esc 会自己把组字丢掉（和人手按一样）。
+        //
+        // 为什么不用 `ImmNotifyIME(CPS_CANCEL)`：跨进程调 Imm* 拿到的 context
+        // 读不到组字内容（实测 `ImmGetCompositionString` 一直返回 0），
+        // 取消也就时灵时不灵。Esc 是走正常输入通道的，输入法一定认。
+        crate::win32::send_virtual_key(0x1B);
+        std::thread::sleep(std::time::Duration::from_millis(40));
+        crate::win32::cancel_ime_composition(hwnd);
+        // 取消是**异步**的。以前只固定睡 25ms 就往下走，结果组字窗还开着，
+        // 注入的替换文本被输入法当成拼音吃掉 —— 屏幕上什么都不剩。
+        // 现在轮询到「组字真的没了」再继续，最多等 300ms。
+        for _ in 0..30 {
+            if crate::win32::ime_composition_len(hwnd) == 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(15));
+        if std::env::var_os("GPUI_MENU_DEBUG_HS").is_some() {
+            eprintln!(
+                "[hs] 取消组字后 composition={} 目标窗口={hwnd}",
+                crate::win32::ime_composition_len(hwnd)
+            );
+        }
         crate::win32::send_backspaces(count);
-        std::thread::sleep(std::time::Duration::from_millis(25));
+        std::thread::sleep(std::time::Duration::from_millis(15));
     }
     // 绑在子菜单上：先把被吞掉的结束字符还给目标程序，再弹那一支
     if settings::item_is_submenu(id) {
