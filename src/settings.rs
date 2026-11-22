@@ -344,7 +344,7 @@ impl ActionKind {
             }
             ActionKind::Url => "例如 https://gpui.rs，或某个文件路径",
             ActionKind::Keys => "例如 Ctrl+S，连按多个用空格隔开：Ctrl+A Delete",
-            ActionKind::Text => "直接当键盘输入打出去，支持中文和占位符（{selection} / {clipboard} / {ahkvar:A_Now}）",
+            ActionKind::Text => "直接当键盘输入打出去，支持中文和占位符（{selection} / {clipboard} / {ahkvar:A_Now}）；要按回车 / Tab / 退格就写 {Enter} / {Tab} / {Backspace}，打大括号本身写 {{ 和 }}",
             ActionKind::Builtin => "从动作库里挑一个；带参数的可以在这里改",
             ActionKind::Script => "AutoHotkey v1 / v2 代码，直接在这里写（也可以先粘过来）",
         })

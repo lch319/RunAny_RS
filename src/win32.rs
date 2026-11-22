@@ -1498,6 +1498,83 @@ mod imp {
     }
 
     /// 注入一段文本（走 Unicode 输入，不碰剪贴板，中文也能打）。
+    /// 「发送文本」但认识 `{Enter}` `{Tab}` `{Backspace}` 这类按键记号。
+    ///
+    /// 为什么需要：`send_text` 走的是 Unicode 注入，`{Enter}` 会**原样打出**
+    /// 大括号；可用户写「发送文本」时十有八九想的是「打这段字，中间按一下回车」。
+    ///
+    /// 规则（和 AHK 的 Send 一致）：
+    /// - `{Enter}` `{Tab}` `{Backspace}` `{Esc}` `{Left}` `{Space}` `{F5}`
+    ///   `{Ctrl+S}` 这类 → 当成按键按一下
+    /// - `{{` → 一个字面的 `{`；`}}` → 一个字面的 `}`
+    /// - 认不出来的 `{xxx}` **原样保留**（宁可打出大括号，也不能把内容吃掉）
+    pub fn send_text_with_keys(text: &str) -> Result<(), String> {
+        let mut literal = String::new();
+        let mut chars = text.chars().peekable();
+        let mut flush = |literal: &mut String| -> Result<(), String> {
+            if literal.is_empty() {
+                return Ok(());
+            }
+            let chunk = std::mem::take(literal);
+            send_text(&chunk)?;
+            // 文本（`KEYEVENTF_UNICODE`）进目标窗口是**异步**的，按键事件却立刻
+            // 处理：不等一下的话顺序会反过来 —— `第一{Enter}第二` 实测打出来是
+            // 「回车、第一、第二」（回车跑到前面去了）。给它十几毫秒落地。
+            std::thread::sleep(std::time::Duration::from_millis(18));
+            Ok(())
+        };
+        while let Some(ch) = chars.next() {
+            match ch {
+                '{' => {
+                    if chars.peek() == Some(&'{') {
+                        chars.next();
+                        literal.push('{');
+                        continue;
+                    }
+                    let mut token = String::new();
+                    let mut closed = false;
+                    for next in chars.by_ref() {
+                        if next == '}' {
+                            closed = true;
+                            break;
+                        }
+                        token.push(next);
+                    }
+                    if !closed {
+                        // 没闭合：当普通字符
+                        literal.push('{');
+                        literal.push_str(&token);
+                        continue;
+                    }
+                    if token.is_empty() {
+                        literal.push_str("{}");
+                        continue;
+                    }
+                    // **先把前面攒的文本送出去**，再按这个键 —— 顺序反了就会打成
+                    // 「回车、第一、第二」（实测过）。
+                    flush(&mut literal)?;
+                    match send_keys(&token) {
+                        Ok(()) => std::thread::sleep(std::time::Duration::from_millis(12)),
+                        Err(_) => {
+                            // 认不出来的记号：原样打出去
+                            literal.push('{');
+                            literal.push_str(&token);
+                            literal.push('}');
+                        }
+                    }
+                }
+                '}' => {
+                    if chars.peek() == Some(&'}') {
+                        chars.next();
+                    }
+                    literal.push('}');
+                }
+                other => literal.push(other),
+            }
+        }
+        flush(&mut literal)
+    }
+
     pub fn send_text(text: &str) -> Result<(), String> {
         use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
             SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
@@ -3572,7 +3649,8 @@ pub use imp::{
     process_ids, top_windows, activate_or_minimize, close_window, launch_as, split_command,
     monitor_off, empty_recycle_bin, ahk_from_registry,
     make_click_through, set_click_through,
-    resize_window, fit_client_size, ime_composition_len, work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
+    resize_window, fit_client_size, ime_composition_len, send_text_with_keys,
+    work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
     cancel_ime_composition, cancel_ime_composition_in, place_ime_in,
 };
@@ -4045,6 +4123,11 @@ pub fn fit_client_size(_hwnd: isize, _width: f32, _height: f32, _scale: f32) {}
 #[cfg(not(windows))]
 pub fn ime_composition_len(_hwnd: isize) -> usize {
     0
+}
+
+#[cfg(not(windows))]
+pub fn send_text_with_keys(text: &str) -> Result<(), String> {
+    Err(format!("只有 Windows 支持：{text}"))
 }
 
 #[cfg(not(windows))]

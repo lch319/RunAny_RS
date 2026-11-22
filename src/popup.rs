@@ -1231,7 +1231,8 @@ fn execute_step(cx: &mut App, step: &ActionStep, append_selection: bool) -> Resu
             if value.is_empty() {
                 return Ok(());
             }
-            win32::send_text(value)
+            // 认识 `{Enter}` `{Tab}` `{Backspace}` 这类记号（`{{` 打一个大括号）
+            win32::send_text_with_keys(value)
         }
         ActionKind::Builtin => {
             // 老配置里的 9 个内置动作（open-settings / quit …）还要能跑
