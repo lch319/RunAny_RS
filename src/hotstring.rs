@@ -822,6 +822,9 @@ fn fire_hit(rule: &Rule, replay: Option<Replay>) {
     let id = rule.id.clone();
     // `:O:` 不把结束字符跟着打出去；`:B0:` 不删已经敲进去的触发词
     let replay = if rule.omit_end { None } else { replay };
+    if !crate::win32::is_elevated() && crate::win32::target_is_elevated() {
+        hs_log("命中，但目标程序是**提权**运行的，本程序不是 —— UIPI 会丢掉我们注入的按键/文本");
+    }
     let (screen, composing) = take_screen();
     // 光标位移是实测值，比按物理键推算准（输入法选候选会吃掉/合并字符）
     let measured = measured_screen();

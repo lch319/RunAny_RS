@@ -3387,6 +3387,59 @@ mod imp {
     }
 
     /// 当前进程是不是管理员权限（AHK 的 `A_IsAdmin`）。
+    /// 光标底下那个输入框所属的进程是不是**提权**运行的。
+    ///
+    /// UIPI：非提权进程注入的按键/剪贴板操作会被系统直接丢弃，而且**不报错**。
+    /// 表现就是「热字符串命中了、提示也弹了，但目标程序一个字都没变」——
+    /// 目标程序以管理员运行时必现（记事本、某些编辑器、游戏启动器都是）。
+    pub fn target_is_elevated() -> bool {
+        use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+        use windows_sys::Win32::Security::{
+            GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+        };
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentProcessId, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        let (top, _) = crate::win32::input_target();
+        if top == 0 {
+            return false;
+        }
+        unsafe {
+            let mut pid = 0u32;
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
+                top as HWND,
+                &mut pid,
+            );
+            if pid == 0 || pid == GetCurrentProcessId() {
+                return false;
+            }
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if process.is_null() {
+                // 打不开 = 权限比我们高，基本可以认定是提权的
+                return true;
+            }
+            let mut token: HANDLE = std::ptr::null_mut();
+            let mut elevated = false;
+            if OpenProcessToken(process, TOKEN_QUERY, &mut token) != 0 {
+                let mut info = TOKEN_ELEVATION { TokenIsElevated: 0 };
+                let mut size = 0u32;
+                if GetTokenInformation(
+                    token,
+                    TokenElevation,
+                    &mut info as *mut _ as *mut _,
+                    std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+                    &mut size,
+                ) != 0
+                {
+                    elevated = info.TokenIsElevated != 0;
+                }
+                let _ = CloseHandle(token);
+            }
+            let _ = CloseHandle(process);
+            elevated
+        }
+    }
+
     pub fn is_elevated() -> bool {
         use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
         use windows_sys::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
@@ -3509,7 +3562,8 @@ pub use imp::{
     watch_foreground, window_process_id,
     process_name_of_window, input_context, preview_context, context_of_window,
     foreground_process_name, window_at_cursor, selection_target,
-    system_uptime_ms, is_elevated, kill_other_instances, http_get, window_scale,
+    system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,
+    window_scale,
     install_input_hooks, set_key_gate, set_mouse_gate, numlock_on, press_numlock,
     modifier_state, click_tick, send_backspaces, send_virtual_key,
     ime_composing, caret_rect,
@@ -3991,6 +4045,11 @@ pub fn fit_client_size(_hwnd: isize, _width: f32, _height: f32, _scale: f32) {}
 #[cfg(not(windows))]
 pub fn ime_composition_len(_hwnd: isize) -> usize {
     0
+}
+
+#[cfg(not(windows))]
+pub fn target_is_elevated() -> bool {
+    false
 }
 
 #[cfg(not(windows))]
