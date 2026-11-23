@@ -2611,7 +2611,13 @@ impl SettingsView {
                         div()
                             .text_size(px(10.))
                             .text_color(theme::ui_text_tertiary())
-                            .child(crate::i18n::t("v0.2.0 · 便携版")),
+                            // 用编译时的真实版本号：以前是写死的 "v0.2.0"，
+                            // 换了 exe 也看不出来，排查问题白费半天
+                            .child(format!(
+                                "v{} · {}",
+                                env!("CARGO_PKG_VERSION"),
+                                crate::i18n::t("便携版")
+                            )),
                     ),
             )
             .into_any_element()

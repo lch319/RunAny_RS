@@ -135,12 +135,28 @@ pub fn lookup(name: &str, limit: usize) -> Vec<Hit> {
     };
     let mut found = query(&pattern, limit.max(12));
     // 带扩展名的整名查询在**有些机器上一条都查不出来**（实测 `QQ.exe` 返回 0 条，
-    // 而 `QQ` 能查到 `D://软件//安装版//QQNT//QQ.exe`）。原因在 Everything 那边
-    // 对「名字带点」的解析上，各家索引配置不一样，不去猜它——查不到就退回
-    // 「按主名找」，再把结果按**完整文件名**过滤一遍，精确性不变。
+    // 而 `QQ` 能查到 `D://软件//安装版//QQNT//QQ.exe`）。Everything 各家索引配置
+    // 不一样，带点的名字怎么解析没法一概而论 —— 干脆**多试几种写法**，
+    // 每一轮都用同样的「完整文件名必须相等」过滤，精确性不受影响：
+    //
+    //   1. `"QQ.exe"`  —— 带引号的整名（默认）
+    //   2. `QQ.exe`    —— 不带引号
+    //   3. `"QQ.*"`    —— 主名通配（用户在「查名字」框里输 QQ 走的就是它）
+    //   4. `QQ`        —— 光主名
     if found.is_empty() && has_ext {
-        if let Some(stem) = lower.split('.').next().filter(|stem| !stem.is_empty()) {
-            found = query(&format!("\"{stem}.*\""), limit.max(60));
+        let stem = lower.split('.').next().unwrap_or(&lower).to_string();
+        for attempt in [
+            name.to_string(),
+            format!("\"{stem}.*\""),
+            stem.clone(),
+        ] {
+            found = query(&attempt, limit.max(60));
+            if std::env::var_os("GPUI_MENU_DEBUG_PROG").is_some() {
+                eprintln!("[prog] 整名查不到，改用 {attempt:?} -> {} 条", found.len());
+            }
+            if !found.is_empty() {
+                break;
+            }
         }
     }
     found.retain(|hit| {
