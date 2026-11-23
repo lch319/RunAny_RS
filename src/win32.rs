@@ -3154,6 +3154,178 @@ mod imp {
     }
 
     /// 这个窗口所在显示器的工作区（不含任务栏）：`(x, y, 宽, 高)`，物理像素。
+    /// 窗口的**真实**矩形（去掉 Win10 那圈隐形阴影边框）。
+    ///
+    /// `GetWindowRect` 在 Win10 上会把 DWM 的阴影算进去，四周各多出 7~8px ——
+    /// 照着它摆窗口会越挪越小、对齐也差一点点。优先问 DWM 要「可见边框」。
+    pub fn window_rect_exact(hwnd: isize) -> Option<(i32, i32, i32, i32)> {
+        use windows_sys::Win32::Graphics::Dwm::DwmGetWindowAttribute;
+        use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect;
+        if hwnd == 0 {
+            return None;
+        }
+        const DWMWA_EXTENDED_FRAME_BOUNDS: u32 = 9;
+        unsafe {
+            let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            let ok = DwmGetWindowAttribute(
+                hwnd as HWND,
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                &mut rect as *mut RECT as *mut _,
+                std::mem::size_of::<RECT>() as u32,
+            ) == 0;
+            if !ok || rect.right <= rect.left || rect.bottom <= rect.top {
+                if GetWindowRect(hwnd as HWND, &mut rect) == 0 {
+                    return None;
+                }
+            }
+            Some((rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top))
+        }
+    }
+
+    /// 移动 / 调整大小（`w`/`h` 传 0 表示不动那一维）。
+    pub fn move_resize_window(hwnd: isize, x: i32, y: i32, width: i32, height: i32) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER,
+        };
+        if hwnd == 0 {
+            return;
+        }
+        unsafe {
+            SetWindowPos(
+                hwnd as HWND,
+                std::ptr::null_mut(),
+                x,
+                y,
+                width.max(0),
+                height.max(0),
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
+    }
+
+/// 收集所有显示器的工作区（含任务栏以外区域），按系统枚举顺序。
+fn monitor_areas() -> Vec<(i32, i32, i32, i32)> {
+        use windows_sys::Win32::Foundation::{LPARAM, RECT, TRUE};
+        use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, MONITORINFO};
+        unsafe extern "system" fn each(
+            monitor: *mut std::ffi::c_void,
+            _dc: *mut std::ffi::c_void,
+            _rect: *mut RECT,
+            data: LPARAM,
+        ) -> windows_sys::Win32::Foundation::BOOL {
+            let list = &mut *(data as *mut Vec<(i32, i32, i32, i32)>);
+            let mut info: MONITORINFO = std::mem::zeroed();
+            info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+            if GetMonitorInfoW(monitor, &mut info) != 0 {
+                let work = info.rcWork;
+                list.push((
+                    work.left,
+                    work.top,
+                    work.right - work.left,
+                    work.bottom - work.top,
+                ));
+            }
+            TRUE
+        }
+        let mut list: Vec<(i32, i32, i32, i32)> = Vec::new();
+        unsafe {
+            EnumDisplayMonitors(
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                Some(each),
+                &mut list as *mut Vec<(i32, i32, i32, i32)> as LPARAM,
+            );
+        }
+        list
+    }
+
+    /// 显示器数量。
+    pub fn monitor_count() -> usize {
+        monitor_areas().len().max(1)
+    }
+
+    /// 第 `index`（从 1 开始）块屏的工作区：`(x, y, w, h)`。
+    pub fn monitor_work_area(index: usize) -> Option<(i32, i32, i32, i32)> {
+        monitor_areas().get(index.saturating_sub(1)).copied()
+    }
+
+    /// 结束某个进程。`force` = 强杀（不给它保存的机会）。
+    pub fn kill_process(pid: u32, force: bool) -> bool {
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, TerminateProcess, PROCESS_TERMINATE,
+        };
+        if pid == 0 {
+            return false;
+        }
+        unsafe {
+            let handle = OpenProcess(PROCESS_TERMINATE, 0, pid);
+            if handle.is_null() {
+                return false;
+            }
+            let code = TerminateProcess(handle, if force { 1 } else { 0 });
+            let _ = windows_sys::Win32::Foundation::CloseHandle(handle);
+            code != 0
+        }
+    }
+
+    /// 按「同一条路径的程序」收集所有相关进程（结束所有同名窗服用）。
+    pub fn sibling_processes(path: &str) -> Vec<u32> {
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, GetWindowThreadProcessId,
+        };
+        let mut pids: Vec<u32> = Vec::new();
+        unsafe extern "system" fn each(hwnd: HWND, data: LPARAM) -> windows_sys::Win32::Foundation::BOOL {
+            let (path, pids) = &mut *(data as *mut (String, Vec<u32>));
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(hwnd, &mut pid);
+            if pid == 0 || pids.contains(&pid) {
+                return 1;
+            }
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if handle.is_null() {
+                return 1;
+            }
+            let mut buffer = vec![0u16; 1024];
+            let mut size = buffer.len() as u32;
+            if QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &mut size) != 0 {
+                let text = String::from_utf16_lossy(&buffer[..size as usize]);
+                if text.eq_ignore_ascii_case(path) {
+                    pids.push(pid);
+                }
+            }
+            let _ = windows_sys::Win32::Foundation::CloseHandle(handle);
+            1
+        }
+        let mut data = (path.to_string(), pids);
+        unsafe {
+            EnumWindows(Some(each), &mut data as *mut (String, Vec<u32>) as LPARAM);
+        }
+        pids = data.1;
+        pids
+    }
+
+    /// 用资源管理器打开某个文件所在的文件夹并选中它。
+    pub fn open_file_location(path: &str) {
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let wide = |text: &str| -> Vec<u16> {
+            text.encode_utf16().chain(std::iter::once(0)).collect()
+        };
+        unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                wide("open").as_ptr(),
+                wide("explorer.exe").as_ptr(),
+                wide(&format!("/select,\"{path}\"")).as_ptr(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            );
+        }
+    }
+
     pub fn window_work_area(hwnd: isize) -> Option<(i32, i32, i32, i32)> {
         use windows_sys::Win32::Graphics::Gdi::{
             GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
@@ -3782,6 +3954,51 @@ mod imp {
     }
 
     /// 光标底下是哪个窗口（拖动拾取「禁用应用」时用；松手那一刻问一次）。
+    /// 按「标题包含 / 类名 / 进程名」找一扇可见窗口（找不到给 None）。
+    pub fn find_window(kind: &str, needle: &str) -> Option<isize> {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, GetClassNameW, GetWindowTextW, IsWindowVisible,
+        };
+        unsafe extern "system" fn each(
+            hwnd: HWND,
+            data: LPARAM,
+        ) -> windows_sys::Win32::Foundation::BOOL {
+            let (kind, needle, found) = &mut *(data as *mut (String, String, isize));
+            if IsWindowVisible(hwnd) == 0 {
+                return 1;
+            }
+            let matched = if kind == "title" {
+                let mut buffer = vec![0u16; 512];
+                let len = GetWindowTextW(hwnd, buffer.as_mut_ptr(), buffer.len() as i32);
+                let text = String::from_utf16_lossy(&buffer[..len.max(0) as usize]);
+                !text.is_empty() && text.to_lowercase().contains(needle.as_str())
+            } else if kind == "class" {
+                let mut buffer = vec![0u16; 256];
+                let len = GetClassNameW(hwnd, buffer.as_mut_ptr(), buffer.len() as i32);
+                let text = String::from_utf16_lossy(&buffer[..len.max(0) as usize]);
+                text.to_lowercase().contains(needle.as_str())
+            } else {
+                process_path_of_window(hwnd as isize)
+                    .map(|path| path.to_lowercase().contains(needle.as_str()))
+                    .unwrap_or(false)
+            };
+            if matched {
+                *found = hwnd as isize;
+                return 0; // 找到就停
+            }
+            1
+        }
+        let needle_lower = needle.to_lowercase();
+        let mut data = (kind.to_string(), needle_lower, 0isize);
+        unsafe {
+            EnumWindows(
+                Some(each),
+                &mut data as *mut (String, String, isize) as LPARAM,
+            );
+        }
+        (data.2 != 0).then_some(data.2)
+    }
+
     pub fn window_at_cursor() -> isize {
         let (x, y) = cursor_position();
         unsafe { WindowFromPoint(POINT { x, y }) as isize }
@@ -3880,6 +4097,9 @@ pub use imp::{
     watch_foreground, window_process_id,
     process_name_of_window, input_context, preview_context, context_of_window,
     foreground_process_name, window_at_cursor, selection_target,
+    window_rect_exact, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
+    process_path_of_window,
+    sibling_processes, open_file_location,
     system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,
     window_scale,
     install_input_hooks, set_key_gate, set_mouse_gate, numlock_on, press_numlock,

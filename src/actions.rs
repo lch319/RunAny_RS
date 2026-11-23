@@ -460,6 +460,189 @@ pub static BUILTINS: &[BuiltinDef] = &[
         category: Category::Window,
         params: NONE,
     },
+    BuiltinDef {
+        id: "win.move-to",
+        name: "移动到（某位置）",
+        desc: "按九宫格 + 居中把窗口摆到屏幕上，和 GhostSnap 的 MoveWindow_xy 一个意思",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef {
+                key: "pos",
+                label: "位置",
+                kind: ParamKind::Choice(&[
+                    ("lt", "左上角"),
+                    ("tc", "中间上侧"),
+                    ("rt", "右上角"),
+                    ("ml", "中间左侧"),
+                    ("c", "正中央"),
+                    ("mr", "中间右侧"),
+                    ("lb", "左下角"),
+                    ("bc", "中间下侧"),
+                    ("rb", "右下角"),
+                    ("hc", "水平居中"),
+                    ("vc", "垂直居中"),
+                ]),
+                default: "c",
+                hint: "按窗口所在显示器的**工作区**（不含任务栏）算",
+            },
+        ],
+    },
+    BuiltinDef {
+        id: "win.move",
+        name: "移动到坐标",
+        desc: "把窗口左上角挪到指定坐标",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef { key: "x", label: "X", kind: ParamKind::Text, default: "0", hint: "像素，或 50%（相对工作区）" },
+            ParamDef { key: "y", label: "Y", kind: ParamKind::Text, default: "0", hint: "像素，或 50%" },
+        ],
+    },
+    BuiltinDef {
+        id: "win.move-resize",
+        name: "移动并调整大小",
+        desc: "一步把窗口摆到指定位置和大小",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef { key: "x", label: "X", kind: ParamKind::Text, default: "0", hint: "像素或 %" },
+            ParamDef { key: "y", label: "Y", kind: ParamKind::Text, default: "0", hint: "像素或 %" },
+            ParamDef { key: "w", label: "宽", kind: ParamKind::Text, default: "800", hint: "像素或 %（相对工作区宽）" },
+            ParamDef { key: "h", label: "高", kind: ParamKind::Text, default: "600", hint: "像素或 %" },
+        ],
+    },
+    BuiltinDef {
+        id: "win.to-monitor",
+        name: "移到指定显示器",
+        desc: "把窗口搬到第 N 块屏，并在那块屏居中",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef {
+                key: "index",
+                label: "显示器",
+                kind: ParamKind::Int { min: 1, max: 8, step: 1, unit: "号" },
+                default: "2",
+                hint: "1 = 主屏；超出实际数量会取最后一块",
+            },
+            ParamDef {
+                key: "center",
+                label: "居中",
+                kind: ParamKind::Bool,
+                default: "1",
+                hint: "关掉只搬到那块屏的左上角，保持原来的相对偏移",
+            },
+        ],
+    },
+    BuiltinDef {
+        id: "win.size",
+        name: "设定宽高",
+        desc: "只改大小，不动位置",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef { key: "w", label: "宽", kind: ParamKind::Text, default: "800", hint: "像素或 %" },
+            ParamDef { key: "h", label: "高", kind: ParamKind::Text, default: "600", hint: "像素或 %" },
+        ],
+    },
+    BuiltinDef {
+        id: "win.scale",
+        name: "按比例缩放",
+        desc: "以中心为基准放大 / 缩小（100 = 不变）",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef {
+                key: "percent",
+                label: "比例",
+                kind: ParamKind::Int { min: 20, max: 300, step: 10, unit: "%" },
+                default: "120",
+                hint: "中心保持不变，四周按比例伸缩",
+            },
+        ],
+    },
+    BuiltinDef {
+        id: "win.alpha",
+        name: "设置窗口不透明度",
+        desc: "把窗口调成半透明（100 = 不透明）",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef {
+                key: "percent",
+                label: "不透明度",
+                kind: ParamKind::Int { min: 10, max: 100, step: 5, unit: "%" },
+                default: "80",
+                hint: "100 会把分层属性去掉，恢复成完全不透明",
+            },
+        ],
+    },
+    BuiltinDef {
+        id: "win.kill",
+        name: "结束进程",
+        desc: "把目标窗口所属进程结束掉",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef {
+                key: "force",
+                label: "强制结束",
+                kind: ParamKind::Bool,
+                default: "0",
+                hint: "强杀不给它保存的机会；有的程序会拦正常退出",
+            },
+        ],
+    },
+    BuiltinDef {
+        id: "win.kill-all",
+        name: "结束所有同名窗口",
+        desc: "目标程序的**所有**实例都结束（按 exe 完整路径判断）",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef {
+                key: "force",
+                label: "强制结束",
+                kind: ParamKind::Bool,
+                default: "0",
+                hint: "只结束同一个 exe 路径的进程，不会误伤别的程序",
+            },
+        ],
+    },
+    BuiltinDef {
+        id: "win.restart",
+        name: "重启进程",
+        desc: "结束目标窗口的进程再重新启动它",
+        category: Category::Window,
+        params: &[
+            P_TARGET,
+            P_MATCH,
+            ParamDef {
+                key: "delay",
+                label: "等多久再启动",
+                kind: ParamKind::Int { min: 0, max: 10000, step: 200, unit: "ms" },
+                default: "800",
+                hint: "给程序留点收尾时间；命令行参数会丢（只按 exe 路径重启）",
+            },
+        ],
+    },
+    BuiltinDef {
+        id: "win.open-folder",
+        name: "打开窗口所在目录",
+        desc: "在资源管理器里打开目标程序所在文件夹并选中它",
+        category: Category::Window,
+        params: &[P_TARGET, P_MATCH],
+    },
     // ---------------- 剪贴板 ----------------
     BuiltinDef {
         id: "clip.copy",
@@ -755,6 +938,72 @@ impl<'a> Values<'a> {
     }
 }
 
+/// 所有窗口类动作都带这两个参数：选哪个窗口、拿什么去匹配。
+const P_TARGET: ParamDef = ParamDef {
+    key: "target",
+    label: "目标窗口",
+    kind: ParamKind::Choice(&[
+        ("fg", "前台窗口"),
+        ("mouse", "鼠标下的窗口"),
+        ("title", "标题包含"),
+        ("class", "窗口类名"),
+        ("exe", "进程名"),
+    ]),
+    default: "fg",
+    hint: "选了标题 / 类名 / 进程名，就在下面「匹配内容」里填对应的文字",
+};
+
+const P_MATCH: ParamDef = ParamDef {
+    key: "match",
+    label: "匹配内容",
+    kind: ParamKind::Text,
+    default: "",
+    hint: "比如 `QQ` 或 `notepad.exe`；目标选「前台窗口 / 鼠标下」时忽略这一栏",
+};
+
+/// 解析出要操作的窗口。
+fn target_window(values: &Values) -> Result<isize, String> {
+    let kind = values.text("target", "fg");
+    let needle = values.text("match", "");
+    let hwnd = match kind.as_str() {
+        "mouse" => crate::win32::window_at_cursor(),
+        "title" | "class" | "exe" if !needle.is_empty() => {
+            crate::win32::find_window(&kind, &needle).unwrap_or(0)
+        }
+        _ => crate::win32::foreground_window(),
+    };
+    if hwnd == 0 {
+        return Err(match kind.as_str() {
+            "mouse" => "鼠标底下没有窗口".to_string(),
+            "title" | "class" | "exe" if !needle.is_empty() => {
+                format!("没找到匹配 {needle:?} 的窗口")
+            }
+            _ => "没有前台窗口".to_string(),
+        });
+    }
+    Ok(hwnd)
+}
+
+/// 把「800」或「50%」解析成像素；`total` 是百分比的基准。
+fn length(value: &str, total: i32) -> Option<i32> {
+    let text = value.trim();
+    if text.is_empty() {
+        return None;
+    }
+    if let Some(percent) = text.strip_suffix('%') {
+        let percent: f32 = percent.trim().parse().ok()?;
+        return Some((total as f32 * percent / 100.0).round() as i32);
+    }
+    text.parse::<i32>().ok()
+}
+
+/// 目标窗口所在的显示器工作区（拿不到就用主屏）。
+fn work_area_of(hwnd: isize) -> (i32, i32, i32, i32) {
+    crate::win32::window_work_area(hwnd)
+        .or_else(|| crate::win32::monitor_work_area(1))
+        .unwrap_or((0, 0, 1920, 1080))
+}
+
 /// 执行一条内置动作。
 ///
 /// 旧的 9 个「内置动作」枚举（`open-settings` / `quit` …）也走这里，
@@ -905,6 +1154,256 @@ pub fn execute(id: &str, params: &BTreeMap<String, String>) -> Result<(), String
         "win.right-half" => half_screen(false),
         "win.center" => center_window(),
         "win.switch" => combo(&[Key::Alt, Key::Tab]),
+
+        // ---- 窗口：移动 / 尺寸 / 显示器 ----
+        "win.move-to" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let (wx, wy, ww, wh) = work_area_of(hwnd);
+                let (_, _, width, height) =
+                    crate::win32::window_rect_exact(hwnd).ok_or("读不到窗口大小")?;
+                let (mut x, mut y) = (wx, wy);
+                match values.text("pos", "c").as_str() {
+                    "lt" => {}
+                    "tc" => x = wx + (ww - width) / 2,
+                    "rt" => x = wx + ww - width,
+                    "ml" => y = wy + (wh - height) / 2,
+                    "c" => {
+                        x = wx + (ww - width) / 2;
+                        y = wy + (wh - height) / 2;
+                    }
+                    "mr" => {
+                        x = wx + ww - width;
+                        y = wy + (wh - height) / 2;
+                    }
+                    "lb" => y = wy + wh - height,
+                    "bc" => {
+                        x = wx + (ww - width) / 2;
+                        y = wy + wh - height;
+                    }
+                    "rb" => {
+                        x = wx + ww - width;
+                        y = wy + wh - height;
+                    }
+                    // 只在一个方向上居中，另一个方向保持原位
+                    "hc" => {
+                        let current = crate::win32::window_rect_exact(hwnd);
+                        y = current.map(|rect| rect.1).unwrap_or(y);
+                        x = wx + (ww - width) / 2;
+                    }
+                    "vc" => {
+                        let current = crate::win32::window_rect_exact(hwnd);
+                        x = current.map(|rect| rect.0).unwrap_or(x);
+                        y = wy + (wh - height) / 2;
+                    }
+                    _ => {}
+                }
+                crate::win32::move_resize_window(hwnd, x, y, width, height);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.move" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let (wx, wy, ww, wh) = work_area_of(hwnd);
+                let x = length(&values.text("x", "0"), ww).unwrap_or(wx);
+                let y = length(&values.text("y", "0"), wh).unwrap_or(wy);
+                // 百分比按工作区算，纯数字当绝对坐标
+                let (x, y) = if values.text("x", "").contains('%') { (wx + x, y + wy) } else { (x, y + 0) };
+                crate::win32::move_resize_window(hwnd, x, y, 0, 0);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.move-resize" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let (wx, wy, ww, wh) = work_area_of(hwnd);
+                let current = crate::win32::window_rect_exact(hwnd).ok_or("读不到窗口大小")?;
+                let x = length(&values.text("x", "0"), ww).unwrap_or(current.0);
+                let y = length(&values.text("y", "0"), wh).unwrap_or(current.1);
+                let width = length(&values.text("w", "0"), ww).unwrap_or(current.2).max(80);
+                let height = length(&values.text("h", "0"), wh).unwrap_or(current.3).max(60);
+                let (x, y) = if values.text("x", "").contains('%') {
+                    (wx + x, y + wy)
+                } else {
+                    (x, y)
+                };
+                crate::win32::move_resize_window(hwnd, x, y, width, height);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.to-monitor" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let count = crate::win32::monitor_count();
+                let index = values.int("index", 2).clamp(1, count as i32) as usize;
+                let (mx, my, mw, mh) =
+                    crate::win32::monitor_work_area(index).ok_or("拿不到那台显示器的信息")?;
+                let (x, y, width, height) =
+                    crate::win32::window_rect_exact(hwnd).ok_or("读不到窗口大小")?;
+                let (target_x, target_y) = if values.flag("center", true) {
+                    (mx + (mw - width) / 2, my + (mh - height) / 2)
+                } else {
+                    // 保持原来的相对偏移，但不跑出目标屏
+                    (mx + x.min(mw.saturating_sub(width)), my + y.min(mh.saturating_sub(height)))
+                };
+                crate::win32::move_resize_window(hwnd, target_x, target_y, width, height);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.size" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let (_, _, ww, wh) = work_area_of(hwnd);
+                let current = crate::win32::window_rect_exact(hwnd).ok_or("读不到窗口大小")?;
+                let width = length(&values.text("w", "0"), ww).unwrap_or(current.2).max(80);
+                let height = length(&values.text("h", "0"), wh).unwrap_or(current.3).max(60);
+                crate::win32::move_resize_window(hwnd, current.0, current.1, width, height);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.scale" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let (x, y, width, height) =
+                    crate::win32::window_rect_exact(hwnd).ok_or("读不到窗口大小")?;
+                let percent = values.int("percent", 120).clamp(20, 300) as f32 / 100.0;
+                let new_width = ((width as f32 * percent).round() as i32).max(80);
+                let new_height = ((height as f32 * percent).round() as i32).max(60);
+                // 以中心为基准：中心不动，四周伸缩
+                let new_x = x + (width - new_width) / 2;
+                let new_y = y + (height - new_height) / 2;
+                crate::win32::move_resize_window(hwnd, new_x, new_y, new_width, new_height);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.alpha" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let percent = values.int("percent", 80).clamp(10, 100);
+                crate::win32::set_window_opacity(hwnd, percent as f32 / 100.0);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.kill" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let pid = crate::win32::window_process_id(hwnd);
+                if pid == 0 {
+                    return Err("拿不到这个窗口的进程".into());
+                }
+                if crate::win32::kill_process(pid, values.flag("force", false)) {
+                    Ok(())
+                } else {
+                    Err("结束失败（权限不够？程序拒绝退出？）".into())
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.kill-all" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let path = crate::win32::process_path_of_window(hwnd)
+                    .ok_or("读不到这个窗口对应的程序路径")?;
+                let pids = crate::win32::sibling_processes(&path);
+                if pids.is_empty() {
+                    return Err("没找到同一程序的其它进程".into());
+                }
+                let force = values.flag("force", false);
+                let mut done = 0;
+                for pid in pids {
+                    if crate::win32::kill_process(pid, force) {
+                        done += 1;
+                    }
+                }
+                if done == 0 {
+                    return Err("一个都没结束掉（权限不够？）".into());
+                }
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.restart" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let path = crate::win32::process_path_of_window(hwnd)
+                    .ok_or("读不到这个窗口对应的程序路径")?;
+                let pid = crate::win32::window_process_id(hwnd);
+                if pid != 0 {
+                    let _ = crate::win32::kill_process(pid, false);
+                }
+                let delay = values.int("delay", 800).clamp(0, 10_000) as u64;
+                if delay > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(delay));
+                }
+                std::process::Command::new(&path)
+                    .spawn()
+                    .map_err(|err| format!("启动失败：{err}"))?;
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
+        "win.open-folder" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                let path = crate::win32::process_path_of_window(hwnd)
+                    .ok_or("读不到这个窗口对应的程序路径")?;
+                crate::win32::open_file_location(&path);
+                Ok(())
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
 
         // ---- 剪贴板 ----
         "clip.copy" => combo(&[Key::Ctrl, Key::Char('C')]),
