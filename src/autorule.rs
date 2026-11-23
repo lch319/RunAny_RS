@@ -513,3 +513,43 @@ pub fn text_to_rules(text: &str) -> Vec<settings::AutoRule> {
     flush(&mut current, &mut has_any, &mut rules);
     rules
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probes_are_sane() {
+        assert!(!probe("computer", "").is_empty());
+        assert!(!probe("user", "").is_empty());
+        assert!(!probe("uptime", "").is_empty());
+        assert!(probe("is64", "") == "是" || probe("is64", "") == "否");
+        assert!(!probe("time", "").is_empty());
+    }
+
+    #[test]
+    fn text_round_trip() {
+        let text = "名称: A\n执行: B\n轮次: 3\n间隔: 5\n组合: 或\n条件:\n  wifi eq X\n  uptime gt 60\n";
+        let rules = text_to_rules(text);
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].name, "A");
+        assert_eq!(rules[0].target, "B");
+        assert_eq!(rules[0].rounds, 3);
+        assert_eq!(rules[0].interval_secs, 5);
+        assert!(rules[0].any);
+        assert_eq!(rules[0].conditions.len(), 2);
+        let back = rules_to_text(&rules);
+        assert!(back.contains("wifi eq X"));
+        // 再解析一遍结果要一样（幂等）
+        let again = text_to_rules(&back);
+        assert_eq!(again.len(), 1);
+        assert_eq!(again[0].conditions, rules[0].conditions);
+    }
+
+    #[test]
+    fn conditions_compare() {
+        assert!(condition_holds("uptime", "gt", "0"));
+        assert!(condition_holds("online", "ne", "不可能的状态"));
+        assert!(!condition_holds("uptime", "lt", "0"));
+    }
+}
