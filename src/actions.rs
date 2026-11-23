@@ -357,9 +357,47 @@ pub static BUILTINS: &[BuiltinDef] = &[
     BuiltinDef {
         id: "win.topmost",
         name: "窗口置顶开关",
-        desc: "把前台窗口切到「总在最前」或取消",
+        desc: "把前台窗口切到「总在最前」或取消，可以顺手加一圈彩色边框",
         category: Category::Window,
-        params: NONE,
+        params: &[
+            ParamDef {
+                key: "mode",
+                label: "模式",
+                kind: ParamKind::Choice(&[
+                    ("toggle", "自动切换"),
+                    ("on", "置顶"),
+                    ("off", "取消置顶"),
+                ]),
+                default: "toggle",
+                hint: "「自动切换」＝现在是置顶就取消，不是就置顶",
+            },
+            ParamDef {
+                key: "border",
+                label: "加外边框",
+                kind: ParamKind::Bool,
+                default: "0",
+                hint: "置顶时给窗口描一圈彩色边（Windows 11 支持；Win10 上颜色可能不生效）",
+            },
+            ParamDef {
+                key: "border_width",
+                label: "边框粗细",
+                kind: ParamKind::Int {
+                    min: 1,
+                    max: 12,
+                    step: 1,
+                    unit: "px",
+                },
+                default: "2",
+                hint: "Win11 22H2 以上才认；老系统上会被忽略",
+            },
+            ParamDef {
+                key: "border_color",
+                label: "边框颜色",
+                kind: ParamKind::Text,
+                default: "#FF3B30",
+                hint: "写 #RRGGBB，比如 #FF3B30 红、#34C759 绿、#0A84FF 蓝",
+            },
+        ],
     },
     BuiltinDef {
         id: "win.minimize",
@@ -806,7 +844,17 @@ pub fn execute(id: &str, params: &BTreeMap<String, String>) -> Result<(), String
             #[cfg(windows)]
             {
                 let hwnd = crate::win32::foreground_window();
-                crate::win32::toggle_topmost(hwnd)
+                let mode = values.text("mode", "toggle");
+                let topmost = crate::win32::set_topmost(hwnd, &mode)?;
+                if values.flag("border", false) && topmost {
+                    let thickness = values.int("border_width", 2).clamp(1, 12) as u32;
+                    let color = crate::win32::parse_hex_color(&values.text("border_color", "#FF3B30"));
+                    crate::win32::set_window_border(hwnd, color, thickness);
+                } else if !topmost {
+                    // 取消置顶时把边框一起收掉，不然会留在窗口上
+                    crate::win32::set_window_border(hwnd, None, 0);
+                }
+                Ok(())
             }
             #[cfg(not(windows))]
             {

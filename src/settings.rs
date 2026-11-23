@@ -2296,6 +2296,66 @@ impl MenuSettings {
         out
     }
 
+    /// 清掉一批菜单项上的某类信息（**不删项**）。
+    ///
+    /// `ids` 为空 = 整棵树都清（托盘那一支不动）。
+    /// 返回实际改动的项数，界面上用它回一句「清掉了 N 项」。
+    pub fn clear_field(&mut self, field: ClearField, ids: &[String]) -> usize {
+        fn walk(
+            items: &mut [ItemSetting],
+            field: ClearField,
+            ids: &[String],
+            changed: &mut usize,
+        ) {
+            for item in items.iter_mut() {
+                if item.id == TRAY_ID || item.kind == ItemKind::Separator {
+                    walk(&mut item.children, field, ids, changed);
+                    continue;
+                }
+                let hit = ids.is_empty() || ids.iter().any(|id| id == &item.id);
+                if hit {
+                    let before = (
+                        item.hotkey.clone(),
+                        item.hotkey_local.clone(),
+                        item.hotstring.clone(),
+                        item.contexts.len(),
+                        item.file_exts.clone(),
+                    );
+                    match field {
+                        ClearField::Hotkey => {
+                            item.hotkey.clear();
+                            item.hotkey_when.clear();
+                        }
+                        ClearField::LocalHotkey => {
+                            item.hotkey_local.clear();
+                            item.hotkey_local_when.clear();
+                        }
+                        ClearField::Hotstring => item.hotstring.clear(),
+                        ClearField::Contexts => {
+                            item.contexts.clear();
+                            item.file_exts.clear();
+                            item.context_mode = ContextMode::Inherit;
+                        }
+                    }
+                    let after = (
+                        item.hotkey.clone(),
+                        item.hotkey_local.clone(),
+                        item.hotstring.clone(),
+                        item.contexts.len(),
+                        item.file_exts.clone(),
+                    );
+                    if before != after {
+                        *changed += 1;
+                    }
+                }
+                walk(&mut item.children, field, ids, changed);
+            }
+        }
+        let mut changed = 0;
+        walk(&mut self.items, field, ids, &mut changed);
+        changed
+    }
+
     /// 当前生效的那一套颜色（跟随系统时按系统明暗取）。
     pub fn active_colors(&self) -> &ThemeColors {
         match self.theme_mode {
@@ -3192,6 +3252,32 @@ impl MenuSettings {
 
     pub fn reset_all(&mut self) {
         *self = Self::default();
+    }
+}
+
+/// 菜单项上「可以批量清掉」的那几类信息。
+///
+/// 只清**这一个字段**，菜单项本身留着 —— 清完照样能点、能跑动作。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ClearField {
+    /// 全局触发快捷键
+    Hotkey,
+    /// 局部触发快捷键（连同生效条件）
+    LocalHotkey,
+    /// 热字符串
+    Hotstring,
+    /// 「只在选中了这些内容时出现」
+    Contexts,
+}
+
+impl ClearField {
+    pub fn label(self) -> &'static str {
+        match self {
+            ClearField::Hotkey => "快捷键",
+            ClearField::LocalHotkey => "局部快捷键",
+            ClearField::Hotstring => "热字符串",
+            ClearField::Contexts => "适用选中内容",
+        }
     }
 }
 

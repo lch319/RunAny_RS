@@ -242,6 +242,7 @@ mod imp {
         fn dpi_for_window(hwnd: HWND) -> u32;
     }
 
+
     #[link(name = "winhttp")]
     extern "system" {
         fn WinHttpOpen(
@@ -3046,6 +3047,87 @@ mod imp {
     }
 
     /// 切换「总在最前」。
+    /// 按模式设置置顶：`on` / `off` / `toggle`。返回设置之后是不是置顶。
+    pub fn set_topmost(hwnd: isize, mode: &str) -> Result<bool, String> {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetWindowLongW, SetWindowPos, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE,
+            SWP_NOMOVE, SWP_NOSIZE,
+        };
+        const WS_EX_TOPMOST: i32 = 0x0000_0008;
+        if hwnd == 0 {
+            return Err("没有前台窗口".into());
+        }
+        unsafe {
+            let style = GetWindowLongW(hwnd as HWND, GWL_EXSTYLE);
+            let now = style & WS_EX_TOPMOST != 0;
+            let want = match mode.trim().to_ascii_lowercase().as_str() {
+                "on" => true,
+                "off" => false,
+                _ => !now,
+            };
+            SetWindowPos(
+                hwnd as HWND,
+                if want { HWND_TOPMOST } else { HWND_NOTOPMOST },
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            );
+            Ok(want)
+        }
+    }
+
+    /// 把 `#RRGGBB` / `RRGGBB` 解析成 (r, g, b)。
+    pub fn parse_hex_color(text: &str) -> Option<(u8, u8, u8)> {
+        let hex = text.trim().trim_start_matches('#');
+        if hex.len() != 6 {
+            return None;
+        }
+        let value = u32::from_str_radix(hex, 16).ok()?;
+        Some((
+            ((value >> 16) & 0xFF) as u8,
+            ((value >> 8) & 0xFF) as u8,
+            (value & 0xFF) as u8,
+        ))
+    }
+
+    /// 给窗口设外边框的颜色和粗细（Windows 11 的 DWM 属性）。
+    ///
+    /// `color` 给 `None` = 去掉边框颜色（恢复系统默认）。粗细在 Win11 22H2+
+    /// 才认，老系统上这一项会静默失败 —— 颜色能生效就够了。
+    pub fn set_window_border(hwnd: isize, color: Option<(u8, u8, u8)>, thickness: u32) -> bool {
+        if hwnd == 0 {
+            return false;
+        }
+        const DWMWA_BORDER_COLOR: u32 = 34;
+        const DWMWA_VISIBLE_FRAME_BORDER_THICKNESS: u32 = 37;
+        const DWMWA_COLOR_NONE: u32 = 0xFFFF_FFFE;
+        unsafe {
+            // COLORREF 是 0x00BBGGRR（注意和 #RRGGBB 的字节序相反）
+            let value: u32 = match color {
+                Some((r, g, b)) => (b as u32) << 16 | (g as u32) << 8 | r as u32,
+                None => DWMWA_COLOR_NONE,
+            };
+            let ok = DwmSetWindowAttribute(
+                hwnd as HWND,
+                DWMWA_BORDER_COLOR,
+                &value as *const u32 as *const _,
+                4,
+            ) == 0;
+            if thickness > 0 {
+                let width = thickness.clamp(1, 12);
+                let _ = DwmSetWindowAttribute(
+                    hwnd as HWND,
+                    DWMWA_VISIBLE_FRAME_BORDER_THICKNESS,
+                    &width as *const u32 as *const _,
+                    4,
+                );
+            }
+            ok
+        }
+    }
+
     pub fn toggle_topmost(hwnd: isize) -> Result<(), String> {
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             GetWindowLongW, SetWindowPos, GWL_EXSTYLE, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE,
@@ -3809,7 +3891,8 @@ pub use imp::{
     monitor_off, empty_recycle_bin, ahk_from_registry,
     make_click_through, set_click_through,
     resize_window, fit_client_size, ime_composition_len, send_text_with_keys, paste_text,
-    cursor_position_physical, screen_size_physical, clipboard_snapshot, clipboard_restore,
+    cursor_position_physical, screen_size_physical, set_topmost, set_window_border,
+    parse_hex_color, clipboard_snapshot, clipboard_restore,
     work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
     cancel_ime_composition, cancel_ime_composition_in, place_ime_in,

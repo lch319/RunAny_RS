@@ -1150,6 +1150,18 @@ impl gpui::Render for TreeView {
                     .child(add_button("添加子菜单", container.clone(), after.clone(), AddKind::Submenu, cx))
                     .child(add_button("添加分隔线", container.clone(), after.clone(), AddKind::Separator, cx))
                     .child(add_button("添加多列符", container.clone(), after.clone(), AddKind::ColumnBreak, cx))
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(1.))
+                            .h(px(16.))
+                            .bg(theme::border()),
+                    )
+                    // 批量清除：只抹掉这一类信息，菜单项和动作都留着
+                    .child(clear_button(settings::ClearField::Hotkey, cx))
+                    .child(clear_button(settings::ClearField::LocalHotkey, cx))
+                    .child(clear_button(settings::ClearField::Hotstring, cx))
+                    .child(clear_button(settings::ClearField::Contexts, cx))
             })
             .when(self.scope_is_live(), |bar| {
                 bar.child(
@@ -1653,6 +1665,51 @@ enum AddKind {
     Separator,
     /// 多列符：和分隔线同一套插入逻辑，只是多一个标记
     ColumnBreak,
+}
+
+/// 「清除 ×××」按钮：清掉选中项（没选中就是全部）上的某一类信息。
+///
+/// 只清那一个字段——菜单项还在，动作还留着，照样能点。
+fn clear_button(field: settings::ClearField, cx: &mut Context<TreeView>) -> AnyElement {
+    let label = format!("清除{}", field.label());
+    let id = format!("tree-clear-{}", field.label());
+    let listener = cx.listener(move |this, _: &ClickEvent, window, cx| {
+        let ids: Vec<String> = if this.selected.is_empty() {
+            Vec::new()
+        } else {
+            this.selected.iter().cloned().collect()
+        };
+        let cleared = settings::update(cx, |settings| settings.clear_field(field, &ids));
+        let scope_label = if ids.is_empty() { "全部" } else { "选中项" };
+        this.note = Some((
+            if cleared == 0 {
+                format!("{scope_label}没有可清除的{}", field.label())
+            } else {
+                format!("已清除{scope_label}的{}（{cleared} 项）", field.label())
+            },
+            std::time::Instant::now(),
+        ));
+        window.refresh();
+        cx.notify();
+    });
+    div()
+        .id(SharedString::from(id))
+        .flex_none()
+        .h(px(24.))
+        .px(px(8.))
+        .flex()
+        .items_center()
+        .rounded(px(6.))
+        .bg(theme::surface_sunken())
+        .border_1()
+        .border_color(theme::border_strong())
+        .cursor_pointer()
+        .text_size(px(10.5))
+        .text_color(theme::ui_text_secondary())
+        .hover(|style| style.bg(theme::surface_hover()))
+        .child(SharedString::from(label))
+        .on_click(listener)
+        .into_any_element()
 }
 
 fn add_button(
