@@ -369,8 +369,45 @@ pub fn start(cx: &mut gpui::App) {
     }
 }
 
-/// 命中：把菜单项找出来跑掉，并按设置弹一条提示。
+/// 命中：把这条规则自己的菜单项按顺序跑一遍，并按设置弹一条提示。
 fn fire(cx: &mut gpui::App, target: &str, label: &str) {
+    // 先拿规则自己的项（新写法）
+    let (actions, rule_name) = settings::read(|settings| {
+        let rule = settings
+            .auto_rules
+            .iter()
+            .find(|rule| rule.target == target || rule.name == label || rule.id == target);
+        match rule {
+            Some(rule) => {
+                let mut actions = Vec::new();
+                for item in rule.items.iter().filter(|item| item.enabled) {
+                    actions.extend(item.actions.iter().cloned());
+                }
+                (actions, rule.name.clone())
+            }
+            None => (Vec::new(), label.to_string()),
+        }
+    });
+
+    if !actions.is_empty() {
+        if settings::read(|settings| settings.auto_notice) {
+            crate::hint::show(
+                cx,
+                vec![crate::hotstring::HintLine {
+                    text: format!(
+                        "自动规则「{}」已执行",
+                        if rule_name.trim().is_empty() { label } else { &rule_name }
+                    ),
+                    dim: true,
+                    id: String::new(),
+                }],
+            );
+        }
+        crate::popup::run_actions_now(cx, actions);
+        return;
+    }
+
+    // 老写法兜底：target 指向主菜单里的一项
     let resolved = settings::read(|settings| {
         if settings.item_by_id(target).is_some() {
             Some(target.to_string())
@@ -386,7 +423,7 @@ fn fire(cx: &mut gpui::App, target: &str, label: &str) {
         crate::hint::show(
             cx,
             vec![crate::hotstring::HintLine {
-                text: format!("自动规则「{label}」找不到菜单项：{target}"),
+                text: format!("自动规则「{label}」还没配要执行的菜单项"),
                 dim: false,
                 id: String::new(),
             }],

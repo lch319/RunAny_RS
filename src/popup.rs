@@ -1038,6 +1038,14 @@ fn add_selection_items(target: &str, full_path: bool, cx: &mut App) {
 /// 调试用：不等点菜单，直接跑某一项的动作（`GPUI_MENU_DEBUG_RUN=<条目 id>`）。
 ///
 /// 用来验证「运行程序只填文件名」有没有真补成完整路径 —— 补成了才会真的启动。
+/// 直接跑一批动作（自动规则用：它的菜单项不在主菜单树里）。
+pub fn run_actions_now(cx: &mut App, actions: Vec<ActionStep>) {
+    if actions.is_empty() {
+        return;
+    }
+    run_actions(actions, false, None, false, cx);
+}
+
 pub fn run_item_now(cx: &mut App, id: &str) {
     let actions = settings::read(|settings| {
         let path = settings.find_path(id)?;

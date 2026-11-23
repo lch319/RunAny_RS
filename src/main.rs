@@ -35,6 +35,7 @@ mod placeholders;
 mod popup;
 mod progindex;
 mod runany_import;
+mod rule_editor;
 mod runopts;
 mod selection;
 mod settings;
@@ -470,6 +471,15 @@ fn main() {
 
         // 自动规则：启动后按「轮次 × 间隔」检测环境条件，命中就执行菜单项
         autorule::start(cx);
+
+        // 调试：`GPUI_MENU_DEBUG_RULE_EDIT=1` 进来就打开第一条规则的编辑窗口
+        if std::env::var_os("GPUI_MENU_DEBUG_RULE_EDIT").is_some() {
+            if let Some(id) = settings::read(|settings| {
+                settings.auto_rules.first().map(|rule| rule.id.clone())
+            }) {
+                rule_editor::open(&id, cx);
+            }
+        }
 
         // 启动那一波（设置解析、programs.json、图标、两个预热窗口）干完以后，
         // 把工作集还给系统：不开菜单的时候，这程序就是托盘里挂着的一个东西，

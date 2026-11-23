@@ -3358,9 +3358,15 @@ pub struct AutoRule {
     pub interval_secs: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<AutoCondition>,
-    /// 命中后执行哪个菜单项：填 id 或文案
-    #[serde(default)]
+    /// 旧写法：命中后执行哪个菜单项（文案或 id）。只为兼容老配置保留。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub target: String,
+    /// 这条规则**自己的**菜单项（和主菜单、托盘那套互不相干，独立排序）。
+    ///
+    /// 命中后按顺序把这些项的动作跑一遍 —— 用户要「一组事一起干」，
+    /// 所以每条规则自带一个列表，而不是去主菜单里挑一项。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub items: Vec<ItemSetting>,
 }
 
 impl Default for AutoRule {
@@ -3374,6 +3380,7 @@ impl Default for AutoRule {
             interval_secs: 10,
             conditions: Vec::new(),
             target: String::new(),
+            items: Vec::new(),
         }
     }
 }
