@@ -13,8 +13,8 @@ use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    div, px, size, AnyElement, App, Bounds, Context, Entity, IntoElement, Render, SharedString,
-    Styled, Subscription, Window, WindowBounds, WindowOptions,
+    div, px, size, AnyElement, App, Bounds, Context, Entity, IntoElement, MouseButton, Render,
+    SharedString, Styled, Subscription, Window, WindowBounds, WindowOptions,
 };
 
 use crate::settings::{self, AutoCondition, AutoRule};
@@ -240,6 +240,7 @@ impl Render for RuleEditor {
 
         // ---- 标题栏
         let chrome_max = chrome.clone();
+        let chrome_drag = crate::chrome::Chrome::new(self.hwnd.clone());
         let header = div()
             .id("rule-editor-header")
             .h(px(40.))
@@ -251,9 +252,31 @@ impl Render for RuleEditor {
             .border_color(theme::border())
             .bg(theme::surface())
             .child(
-                crate::chrome::drag_area("rule-editor-titlebar", &chrome)
+                // 自己实现拖动，不走 `drag_area`：
+                // 那边是「按下时记个 armed，等 mousemove 真正移动了才发
+                // WM_NCLBUTTONDOWN」。指针一旦先划到子视图（树 / 输入框）上，
+                // mousemove 就被子视图吃掉，armed 永远等不到 —— 表现就是
+                // 「一开始能拖，过一会儿拖不动」。这里按下就直接进系统移动循环。
+                div()
+                    .id("rule-editor-titlebar")
                     .flex_1()
                     .min_w_0()
+                    .h_full()
+                    .flex()
+                    .items_center()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, event: &gpui::MouseDownEvent, window, _cx| {
+                            // 双击标题栏 = 最大化 / 还原（和系统一致）
+                            if event.click_count >= 2 {
+                                crate::chrome::toggle_maximize(window, &chrome_drag);
+                                return;
+                            }
+                            if let Some(hwnd) = this.hwnd.get() {
+                                crate::win32::start_system_drag(hwnd, crate::win32::HT_CAPTION);
+                            }
+                        }),
+                    )
                     .child(crate::chrome::title_row(true, crate::i18n::t("编辑自动规则"))),
             )
             .child(
@@ -657,6 +680,8 @@ impl RuleEditor {
                 .border_color(theme::border_strong())
                 .cursor_pointer()
                 .text_size(px(10.5))
+                // 必须显式给颜色：不给就是默认黑字，暗色主题下压在深底上看不见
+                .text_color(theme::text_primary())
                 .child(crate::autorule::variable_label(&cond.var))
                 .child(div().text_color(theme::ui_text_tertiary()).child("▾"))
                 .on_click(cx.listener(move |this, _: &gpui::ClickEvent, _window, cx| {
@@ -760,7 +785,7 @@ impl RuleEditor {
                         })
                         .text_size(px(10.))
                         .text_color(if active {
-                            theme::surface()
+                            theme::text_on_accent()
                         } else {
                             theme::ui_text_secondary()
                         })

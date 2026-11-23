@@ -271,6 +271,14 @@ token!(badge_fill, badge_fill);
 token!(scrollbar, scrollbar);
 token!(danger, danger);
 
+/// 压在强调色上的字（按钮、选中的色块）。
+///
+/// 以前几处图省事写成 `theme::surface()` —— 浅色主题下看着是白的，**暗色主题下
+/// 就是深灰压在蓝底上，几乎看不见**。统一走这个函数，两套主题都是浅色字。
+pub fn text_on_accent() -> Rgba {
+    rgba(0xFFFFFFF2)
+}
+
 /// 窗口根底色：比「菜单背景色」再暗一档，卡片才浮得起来。
 pub fn surface_window() -> Rgba {
     rgba(palette().window)

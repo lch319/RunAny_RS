@@ -3354,7 +3354,9 @@ impl SettingsView {
             let value = color.to_string();
             swatches = swatches.child(
                 div()
-                    .id(SharedString::from(format!("sw-{label}-{color}")))
+                    // id 必须带 dark：浅色/深色两段用同一份 label，不带就撞成同一个元素，
+                    // 后面那一段（深色）的色块和 + 号会全都点不动
+                    .id(SharedString::from(format!("sw-{dark}-{label}-{color}")))
                     .size(px(15.))
                     .flex_none()
                     .rounded(px(4.))
@@ -3407,7 +3409,7 @@ impl SettingsView {
         // ＋：手填十六进制
         row = row.child(
             div()
-                .id(SharedString::from(format!("plus-{label}")))
+                .id(SharedString::from(format!("plus-{dark}-{label}")))
                 .size(px(16.))
                 .flex_none()
                 .flex()
@@ -7703,7 +7705,7 @@ impl SettingsView {
                 })
                 .cursor_pointer()
                 .text_size(px(9.))
-                .text_color(theme::surface())
+                .text_color(theme::text_on_accent())
                 .child(if rule.enabled { "✓" } else { "" })
                 .on_click(cx.listener(move |_this, _: &ClickEvent, window, cx| {
                     let key = id_on.clone();
