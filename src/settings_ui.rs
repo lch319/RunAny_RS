@@ -9577,6 +9577,7 @@ pub(crate) fn segmented(
     let on_pick = Rc::new(on_pick);
     let mut group = div()
         .flex()
+        .flex_none()
         .items_center()
         .gap(px(2.))
         .p(px(2.))

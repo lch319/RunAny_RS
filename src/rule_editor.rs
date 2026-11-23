@@ -121,7 +121,7 @@ impl RuleEditor {
                 .unwrap_or_default()
         });
         let scope = crate::tree_view::Scope::Submenu(container_id.clone());
-        let tree = cx.new(|cx| crate::tree_view::TreeView::new(scope, cx));
+        let tree = cx.new(|cx| crate::tree_view::TreeView::new_compact(scope, cx));
         Self {
             rule_id,
             container_id,
@@ -155,7 +155,7 @@ impl RuleEditor {
         self.subs.clear();
         self.picker = None;
         let scope = crate::tree_view::Scope::Submenu(self.container_id.clone());
-        self.tree = cx.new(|cx| crate::tree_view::TreeView::new(scope, cx));
+        self.tree = cx.new(|cx| crate::tree_view::TreeView::new_compact(scope, cx));
         cx.notify();
     }
 
@@ -301,7 +301,7 @@ impl Render for RuleEditor {
         );
 
         let mut left = div()
-            .w(px(400.))
+            .w(px(464.))
             .flex_none()
             .h_full()
             .flex()
@@ -553,7 +553,7 @@ impl RuleEditor {
         ));
 
         let value_input = self.field(format!("cond|{index}"), cond.value.clone(), "值", cx);
-        row = row.child(div().flex_1().min_w_0().child(boxed(value_input)));
+        row = row.child(div().flex_1());
         row = row.child(
             div()
                 .id(SharedString::from(format!("rule-delcond-{index}")))
@@ -579,7 +579,16 @@ impl RuleEditor {
                 })),
         );
 
-        let mut block = div().flex().flex_col().gap(px(4.)).w_full().min_w_0().child(row);
+        // 值单独一行：条件行的按钮已经占满宽度了，挤在同一行只剩几十像素，
+        // 像 `QQ.exe` 这种值根本看不全
+        let mut block = div()
+            .flex()
+            .flex_col()
+            .gap(px(4.))
+            .w_full()
+            .min_w_0()
+            .child(row)
+            .child(boxed(value_input));
         if picker_open {
             let mut grid = div()
                 .w_full()

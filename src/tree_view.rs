@@ -218,6 +218,11 @@ pub struct TreeView {
     list_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     /// 拖进来的文件等着选「完整路径 / 只填文件名」
     pending_drop: Option<PendingDrop>,
+    /// 精简模式：只留搜索框和「添加菜单项」，别的按钮 / 筛选 / 批量栏都不画。
+    ///
+    /// 自动规则的编辑窗口里用它 —— 那一侧只要「往这条规则里加菜单项」，
+    /// 快捷键清除、子菜单、多列符那些跟规则无关，摆着只会让人分心。
+    compact: bool,
     /// 复制 / 粘贴之后的一句回话（几秒后自己消失）
     note: Option<(String, std::time::Instant)>,
     _subs: Vec<Subscription>,
@@ -251,6 +256,13 @@ fn expand_on_startup(expanded: &mut HashSet<String>) {
 }
 
 impl TreeView {
+    /// 精简模式的树（自动规则编辑窗口用）。
+    pub fn new_compact(scope: Scope, cx: &mut Context<Self>) -> Self {
+        let mut view = Self::new(scope, cx);
+        view.compact = true;
+        view
+    }
+
     pub fn new(scope: Scope, cx: &mut Context<Self>) -> Self {
         let search = cx.new(|cx| {
             TextInput::new("", crate::i18n::t("搜索名称 / 备注 / 快捷键 / 动作参数"), 11.5, cx)
@@ -277,6 +289,7 @@ impl TreeView {
             row_bounds: Rc::new(RefCell::new(HashMap::new())),
             list_bounds: Rc::new(RefCell::new(None)),
             pending_drop: None,
+            compact: false,
             note: None,
             _subs: subs,
         }
@@ -1146,8 +1159,17 @@ impl gpui::Render for TreeView {
                     .child("✕"),
             )
             .when(!self.scope_is_live(), |bar| {
-                bar.child(add_button("添加菜单项", container.clone(), after.clone(), AddKind::Item, cx))
-                    .child(add_button("添加子菜单", container.clone(), after.clone(), AddKind::Submenu, cx))
+                let bar = bar.child(add_button(
+                    "添加菜单项",
+                    container.clone(),
+                    after.clone(),
+                    AddKind::Item,
+                    cx,
+                ));
+                if self.compact {
+                    return bar;
+                }
+                bar.child(add_button("添加子菜单", container.clone(), after.clone(), AddKind::Submenu, cx))
                     .child(add_button("添加分隔线", container.clone(), after.clone(), AddKind::Separator, cx))
                     .child(add_button("添加多列符", container.clone(), after.clone(), AddKind::ColumnBreak, cx))
                     .child(
@@ -1563,7 +1585,9 @@ impl gpui::Render for TreeView {
                 },
             ))
             .child(toolbar);
-        card = card.child(chips).child(batch_bar);
+        if !self.compact {
+            card = card.child(chips).child(batch_bar);
+        }
         if let Some(line) = note_line {
             card = card.child(line);
         }
