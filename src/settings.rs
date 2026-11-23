@@ -2251,19 +2251,24 @@ impl MenuSettings {
     /// 直接用会让新加的项和老项撞 id（撞了 `find_path` 只找到第一个，
     /// 改一条动两条 —— 这类 bug 最难查）。
     pub fn adopt_profile_items(&mut self, items: Vec<ItemSetting>, next_id: u32) {
-        let tray = self
-            .items
-            .iter()
-            .position(|item| item.id == TRAY_ID)
-            .map(|pos| self.items.remove(pos))
-            .or_else(|| self.tray_menu.take())
-            .unwrap_or_else(tray_branch);
+        // 隐藏分支（托盘 / 一键直达 / 自动规则的菜单项）跟着这台机器走，
+        // 换配置时原样留着；`.runa` 里就算带着也丢掉，以本机为准
+        let mut kept: Vec<ItemSetting> = Vec::new();
+        let mut tray = None;
+        for item in std::mem::take(&mut self.items) {
+            if item.id == TRAY_ID {
+                tray = Some(item);
+            } else if is_hidden_branch(&item.id) {
+                kept.push(item);
+            }
+        }
+        let tray = tray.or_else(|| self.tray_menu.take()).unwrap_or_else(tray_branch);
         self.items = items;
-        // 老 `.runa` 里可能带着托盘那一支：丢掉它，托盘以本机为准
-        self.items.retain(|item| item.id != TRAY_ID);
+        self.items.retain(|item| !is_hidden_branch(&item.id));
         self.next_id = next_id.max(1);
         self.bump_next_id();
         self.ensure_unique_ids();
+        self.items.append(&mut kept);
         self.items.push(tray);
         self.reassign_tray_ids();
         self.normalize_tree();
@@ -5376,10 +5381,12 @@ fn save(settings: &MenuSettings) {
     let mut menu_saved = false;
     if settings.pending_profile.is_none() {
         let profile = settings.effective_profile();
+        // 托盘 / 一键直达 / 自动规则的菜单项都属于**这台机器**，不进 `.runa`：
+        // 它们跟着配置走的话，一切换配置就错乱（用户报过）
         let profile_items: Vec<ItemSetting> = settings
             .items
             .iter()
-            .filter(|item| item.id != TRAY_ID)
+            .filter(|item| !is_hidden_branch(&item.id))
             .cloned()
             .collect();
         menu_saved = crate::menu_files::save(&profile, &profile_items, settings.next_id).is_ok();
@@ -5394,7 +5401,13 @@ fn save(settings: &MenuSettings) {
     // 两千条菜单项写两遍要一兆多，而改配色 / 改快捷键每次都要重写这个文件。
     // 只有真正写不进去（只读目录之类）时才留这份兜底。
     if menu_saved {
-        file.items.clear();
+        // 可见菜单项已经进 `.runa` 了，这里只留隐藏分支（托盘 / 一键直达 / 自动规则）
+        file.items = settings
+            .items
+            .iter()
+            .filter(|item| is_hidden_branch(&item.id))
+            .cloned()
+            .collect();
     }
 
     let Ok(text) = serde_json::to_string_pretty(&file) else {

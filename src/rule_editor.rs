@@ -489,6 +489,63 @@ impl Render for RuleEditor {
 }
 
 impl RuleEditor {
+    /// 值的编辑区：按变量类型换控件，并在下面挂一行「当前：xxx」当例子。
+    fn value_block(
+        &mut self,
+        index: usize,
+        cond: &AutoCondition,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let mut block = div().flex().flex_col().gap(px(2.)).w_full().min_w_0();
+
+        match crate::autorule::input_kind(&cond.var) {
+            // 固定几个值：直接给按钮，省得猜「已联网」还是「联网」
+            crate::autorule::InputKind::Choice(options) => {
+                let current = options
+                    .iter()
+                    .position(|option| *option == cond.value)
+                    .unwrap_or(usize::MAX);
+                let mut list: Vec<(u32, &'static str)> = Vec::new();
+                for (position, option) in options.iter().enumerate() {
+                    list.push((position as u32, option));
+                }
+                block = block.child(segmented(
+                    "rule-cond-choice",
+                    &list,
+                    if current == usize::MAX { 999 } else { current as u32 },
+                    cx.listener(move |this, picked: &u32, _window, cx| {
+                        if let Some(option) = options.get(*picked as usize) {
+                            if let Some(cond) = this.draft.conditions.get_mut(index) {
+                                cond.value = option.to_string();
+                            }
+                            this.dirty = true;
+                            cx.notify();
+                        }
+                    }),
+                ));
+            }
+            kind => {
+                let hint: &'static str = match kind {
+                    crate::autorule::InputKind::Number => "数字",
+                    _ => "值",
+                };
+                let input = self.field(format!("cond|{index}"), cond.value.clone(), hint, cx);
+                block = block.child(boxed(input));
+            }
+        }
+
+        let example = crate::autorule::current_example(&cond.var);
+        if !example.is_empty() {
+            block = block.child(
+                div()
+                    .text_size(px(9.5))
+                    .text_color(theme::ui_text_tertiary())
+                    .child(example),
+            );
+        }
+        block.into_any_element()
+    }
+
     /// 一行条件（改的是草稿）。
     fn condition_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
         let cond = self.draft.conditions[index].clone();
@@ -552,7 +609,7 @@ impl RuleEditor {
             }),
         ));
 
-        let value_input = self.field(format!("cond|{index}"), cond.value.clone(), "值", cx);
+        let value_block = self.value_block(index, &cond, cx);
         row = row.child(div().flex_1());
         row = row.child(
             div()
@@ -588,7 +645,7 @@ impl RuleEditor {
             .w_full()
             .min_w_0()
             .child(row)
-            .child(boxed(value_input));
+            .child(value_block);
         if picker_open {
             let mut grid = div()
                 .w_full()

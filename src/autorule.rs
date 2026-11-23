@@ -36,6 +36,58 @@ pub static OPS: &[(&str, &str)] = &[
     ("lt", "小于"),
 ];
 
+/// 这个变量该用什么方式填。
+pub enum InputKind {
+    /// 自由填
+    Text,
+    /// 数字
+    Number,
+    /// 从几个固定值里挑
+    Choice(&'static [&'static str]),
+}
+
+pub fn input_kind(key: &str) -> InputKind {
+    match key {
+        "online" => InputKind::Choice(&["已联网", "未联网"]),
+        "is64" => InputKind::Choice(&["是", "否"]),
+        "uptime" | "hour" | "minute" | "second" | "day" | "month" | "year" | "weekday" => {
+            InputKind::Number
+        }
+        _ => InputKind::Text,
+    }
+}
+
+/// 这个变量「现在是多少」，界面上挂在输入框下面当例子。
+pub fn current_example(key: &str) -> String {
+    match key {
+        "running" => "填 exe 名，比如 QQ.exe".to_string(),
+        "wifi" => {
+            let ssid = probe("wifi", "");
+            if ssid.is_empty() {
+                "当前没连 WiFi".to_string()
+            } else {
+                format!("当前：{ssid}")
+            }
+        }
+        "lan_ip" => {
+            let ip = probe("lan_ip", "");
+            if ip.is_empty() {
+                "当前取不到内网 IP".to_string()
+            } else {
+                format!("当前：{ip}")
+            }
+        }
+        _ => {
+            let value = probe(key, "");
+            if value.is_empty() {
+                String::new()
+            } else {
+                format!("当前：{value}")
+            }
+        }
+    }
+}
+
 pub fn variable_label(key: &str) -> &'static str {
     VARIABLES
         .iter()
