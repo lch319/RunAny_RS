@@ -1365,6 +1365,11 @@ pub struct MenuSettings {
     pub panel_max_width: f32,
     /// 单行高度
     pub row_height: f32,
+    /// 多列菜单里，指针停在**空白处**多久就把展开的子列收起来（毫秒）。
+    ///
+    /// 太短：手一抖就收了；太长：子菜单盖着右边的项，点不到。默认 260。
+    #[serde(default = "default_blank_rest_ms")]
+    pub blank_rest_ms: u32,
     /// 卡片圆角
     pub radius: f32,
     /// 菜单卡片外面那一圈 1px 描边（关掉就是纯色块，靠底色对比分边界）
@@ -1606,6 +1611,10 @@ impl TooltipSettings {
         );
         true
     }
+}
+
+fn default_blank_rest_ms() -> u32 {
+    260
 }
 
 fn default_true() -> bool {
@@ -2070,6 +2079,7 @@ impl MenuSettings {
             panel_width_mode: PanelWidthMode::default(),
             panel_max_width: default_max_panel_width(),
             row_height: 24.0,
+            blank_rest_ms: 260,
             radius: 8.0,
             menu_border: true,
             ahk_v1: String::new(),

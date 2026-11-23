@@ -462,6 +462,10 @@ pub static BUILTINS: &[BuiltinDef] = &[
                     ("rb", "右下角"),
                     ("hc", "水平居中"),
                     ("vc", "垂直居中"),
+                    ("lh", "左半屏"),
+                    ("rh", "右半屏"),
+                    ("th", "上半屏"),
+                    ("bh", "下半屏"),
                 ]),
                 default: "c",
                 hint: "按窗口所在显示器的**工作区**（不含任务栏）算",
@@ -1153,6 +1157,7 @@ pub fn execute(id: &str, params: &BTreeMap<String, String>) -> Result<(), String
                 let (_, _, width, height) =
                     crate::win32::window_rect_exact(hwnd).ok_or("读不到窗口大小")?;
                 let (mut x, mut y) = (wx, wy);
+                let mut size = (width, height);
                 match values.text("pos", "c").as_str() {
                     "lt" => {}
                     "tc" => x = wx + (ww - width) / 2,
@@ -1186,9 +1191,30 @@ pub fn execute(id: &str, params: &BTreeMap<String, String>) -> Result<(), String
                         x = current.map(|rect| rect.0).unwrap_or(x);
                         y = wy + (wh - height) / 2;
                     }
+                    // 半屏：位置和大小一起改
+                    "lh" => {
+                        x = wx;
+                        y = wy;
+                        size = (ww / 2, wh);
+                    }
+                    "rh" => {
+                        x = wx + ww / 2;
+                        y = wy;
+                        size = (ww - ww / 2, wh);
+                    }
+                    "th" => {
+                        x = wx;
+                        y = wy;
+                        size = (ww, wh / 2);
+                    }
+                    "bh" => {
+                        x = wx;
+                        y = wy + wh / 2;
+                        size = (ww, wh - wh / 2);
+                    }
                     _ => {}
                 }
-                crate::win32::move_resize_window(hwnd, x, y, width, height);
+                crate::win32::move_resize_window(hwnd, x, y, size.0, size.1);
                 Ok(())
             }
             #[cfg(not(windows))]

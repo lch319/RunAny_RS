@@ -129,8 +129,9 @@ impl ColumnView {
         let generation = self.blank_gen;
         let hwnd = self.hwnd.unwrap_or(0);
         let task = cx.spawn(async move |this, cx| {
+            let wait = crate::settings::read(|settings| settings.blank_rest_ms).clamp(80, 1500);
             cx.background_executor()
-                .timer(std::time::Duration::from_millis(260))
+                .timer(std::time::Duration::from_millis(wait as u64))
                 .await;
             let _ = this.update(cx, |this, cx| {
                 // 这期间碰过任何一行，或者现在指针就在某一行上 → 不是在留白处

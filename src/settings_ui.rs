@@ -3026,6 +3026,17 @@ impl SettingsView {
                         cx,
                     ));
                     rows.push(self.slider(
+                        "blank-rest",
+                        "空白停留收起",
+                        settings.blank_rest_ms as f32,
+                        80.0,
+                        1500.0,
+                        20.0,
+                        "ms",
+                        |settings, value| settings.blank_rest_ms = value as u32,
+                        cx,
+                    ));
+                    rows.push(self.slider(
                         "radius",
                         "圆角",
                         settings.radius,
