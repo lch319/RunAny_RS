@@ -516,17 +516,29 @@ fn show(cx: &mut App, id: &str) {
         + heights.iter().sum::<f32>()
         + LINE_GAP * lines.len().saturating_sub(1) as f32
         + 2.0;
-    let (cursor_pos, screen, _) = crate::cursor::anchor(cx);
-    let mut x = f32::from(cursor_pos.x) + OFFSET.0;
-    let mut y = f32::from(cursor_pos.y) + OFFSET.1;
+    // ---- 摆窗口的位置**全程用物理像素** ----
+    //
+    // 以前是「`anchor()` 给逻辑坐标 → 加偏移 → 再乘 scale 变物理」。缩放 100%
+    // 没事，175% 时提示会甩到屏幕左上角去（用户截图报过）：逻辑坐标本来就
+    // 是除法得来的浮点数，再乘回去，误差 + 窗口自身的 DPI 一叠加就偏了几百像素。
+    // 现在直接从系统拿物理光标位置，按 scale 放大**偏移量**，一次换算都不来回。
+    let tip_scale = hwnd
+        .and_then(win32::window_scale)
+        .unwrap_or_else(|| crate::cursor::scale_factor(cx))
+        .max(0.5);
+    let (physical_width, physical_height) = ((width * tip_scale) as i32, (height * tip_scale) as i32);
+    let (cursor_x, cursor_y) = win32::cursor_position_physical().unwrap_or((0, 0));
+    let (screen_w, screen_h) = win32::screen_size_physical();
+    let gap = (OFFSET.0 * tip_scale) as i32;
+    let gap_y = (OFFSET.1 * tip_scale) as i32;
+    let mut x = cursor_x + gap;
+    let mut y = cursor_y + gap_y;
     // 右/下放不下就翻到左边/上面，别跑出屏幕
-    let screen_right = f32::from(screen.origin.x) + f32::from(screen.size.width);
-    let screen_bottom = f32::from(screen.origin.y) + f32::from(screen.size.height) - 8.0;
-    if x + width > screen_right {
-        x = (f32::from(cursor_pos.x) - width - 8.0).max(f32::from(screen.origin.x) + 4.0);
+    if x + physical_width > screen_w {
+        x = (cursor_x - physical_width - gap).max(4);
     }
-    if y + height > screen_bottom {
-        y = (screen_bottom - height).max(f32::from(screen.origin.y) + 4.0);
+    if y + physical_height > screen_h {
+        y = (cursor_y - physical_height - gap_y).max(4);
     }
 
     HOST.with(|host| {
@@ -546,11 +558,9 @@ fn show(cx: &mut App, id: &str) {
         // 用**这扇提示窗口**的实际 DPI（而不是主窗口的）：多屏不同缩放、
         // 或者系统是 175% 这种小数缩放时，拿错比例就会少算几个像素、最后一行被裁
         win32::fit_client_size(hwnd, width, height, scale);
-        win32::move_window(
-            hwnd,
-            win32::px_to_physical(x - crate::layout::FRAME_INSET, scale),
-            win32::px_to_physical(y, scale),
-        );
+        // 位置本来就是物理像素了，只把「非客户区左边那圈阴影」扣掉
+        let frame = (crate::layout::FRAME_INSET * tip_scale) as i32;
+        win32::move_window(hwnd, x - frame, y);
         win32::show_window(hwnd);
         // 提示要压在菜单（TOPMOST）上面
         win32::raise_window(hwnd);

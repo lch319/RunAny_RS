@@ -3586,6 +3586,24 @@ mod imp {
         }
     }
 
+    /// 光标位置（**物理**像素）。摆窗口用这个，别用逻辑坐标再乘回去 ——
+    /// 175% 这种小数缩放下换算一次就够呛，换两次必错位。
+    pub fn cursor_position_physical() -> Option<(i32, i32)> {
+        use windows_sys::Win32::Foundation::POINT;
+        use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+        let mut point = POINT { x: 0, y: 0 };
+        let ok = unsafe { GetCursorPos(&mut point) };
+        (ok != 0).then_some((point.x, point.y))
+    }
+
+    /// 主屏尺寸（**物理**像素）。
+    pub fn screen_size_physical() -> (i32, i32) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN,
+        };
+        unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) }
+    }
+
     /// 这扇窗口**自己**的缩放比（96 DPI = 1.0）。
     ///
     /// 多显示器时各块屏的缩放可能不一样；提示窗口是在光标那块屏上建的，
@@ -3790,7 +3808,8 @@ pub use imp::{
     process_ids, top_windows, activate_or_minimize, close_window, launch_as, split_command,
     monitor_off, empty_recycle_bin, ahk_from_registry,
     make_click_through, set_click_through,
-    resize_window, fit_client_size, ime_composition_len, send_text_with_keys, paste_text, clipboard_snapshot, clipboard_restore,
+    resize_window, fit_client_size, ime_composition_len, send_text_with_keys, paste_text,
+    cursor_position_physical, screen_size_physical, clipboard_snapshot, clipboard_restore,
     work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
     cancel_ime_composition, cancel_ime_composition_in, place_ime_in,
@@ -4274,6 +4293,16 @@ pub fn send_text_with_keys(text: &str) -> Result<(), String> {
 #[cfg(not(windows))]
 pub fn paste_text(_text: &str, _wait_ms: u64) -> Result<(), String> {
     Err("只有 Windows 支持".to_string())
+}
+
+#[cfg(not(windows))]
+pub fn cursor_position_physical() -> Option<(i32, i32)> {
+    None
+}
+
+#[cfg(not(windows))]
+pub fn screen_size_physical() -> (i32, i32) {
+    (1920, 1080)
 }
 
 #[cfg(not(windows))]

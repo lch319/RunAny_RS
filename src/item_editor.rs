@@ -4285,7 +4285,7 @@ impl ItemEditor {
                             .text_size(px(9.5))
                             .text_color(theme::ui_text_tertiary())
                             .child(if paste {
-                                crate::i18n::t("走剪贴板 Ctrl+V：先备份、粘完还原（原来若是图片/文件只能还原成空）").to_string()
+                                crate::i18n::t("走剪贴板 Ctrl+V：先整份备份、粘完原样还原").to_string()
                             } else {
                                 crate::i18n::t("直接当键盘输入打出去").to_string()
                             }),
