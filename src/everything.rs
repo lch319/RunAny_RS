@@ -120,56 +120,84 @@ fn inner() -> &'static Mutex<Inner> {
 ///
 /// 名字里带不带 `.exe` 都行：不带扩展名时按 `名字.*` 查，再按「主名相同」收一遍，
 /// 所以 `notepad` 能查到 `notepad.exe`，但不会把 `notepad2.exe` 带出来。
+/// 排查用日志：写到 exe 同目录的 `prog-debug.log`（GUI 程序没有控制台，
+/// `eprintln` 谁也看不见）。设环境变量 `GPUI_MENU_DEBUG_PROG=1` 才写。
+fn prog_log(line: &str) {
+    use std::io::Write;
+    if std::env::var_os("GPUI_MENU_DEBUG_PROG").is_none() {
+        return;
+    }
+    static LOG: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> =
+        std::sync::OnceLock::new();
+    let Some(file) = LOG.get_or_init(|| {
+        let path = std::env::current_exe().ok()?.parent()?.join("prog-debug.log");
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .ok()?;
+        Some(std::sync::Mutex::new(file))
+    }) else {
+        return;
+    };
+    if let Ok(mut file) = file.lock() {
+        let _ = writeln!(file, "{line}");
+    }
+}
+
 pub fn lookup(name: &str, limit: usize) -> Vec<Hit> {
+    // 用 const 拼引号：这个文件里手写 `\"` 太容易出错，干脆不写转义
+    const Q: char = '"';
     let name = name.trim();
     if name.is_empty() {
         return Vec::new();
     }
     let lower = name.to_ascii_lowercase();
     let has_ext = lower.contains('.');
-    // 有扩展名：整名精确；没有：允许任意扩展名（`notepad` → `notepad.exe`）
-    let pattern = if has_ext {
-        format!("\"{name}\"")
+    let stem = lower.split('.').next().unwrap_or(&lower).to_string();
+
+    // `file:` 前缀是关键：Everything 默认开着「匹配路径」，光加引号的整名
+    // 会被拿去匹配**整个路径** → 0 条命中。用户截图里 Everything 自己搜的是
+    // `ext:exe` + 引号整名，能中，说明它按文件名比。这里统一用 `file:` 强制
+    // 按文件名匹配，再不行就退回通配写法，最后都按完整文件名过滤。
+    let mut attempts: Vec<String> = Vec::new();
+    if has_ext {
+        attempts.push(format!("file:{Q}{name}{Q}"));
+        attempts.push(format!("file:{name}"));
+        attempts.push(format!("*{name}"));
     } else {
-        format!("\"{name}.*\"")
-    };
-    let mut found = query(&pattern, limit.max(12));
-    // 带扩展名的整名查询在**有些机器上一条都查不出来**（实测 `QQ.exe` 返回 0 条，
-    // 而 `QQ` 能查到 `D://软件//安装版//QQNT//QQ.exe`）。Everything 各家索引配置
-    // 不一样，带点的名字怎么解析没法一概而论 —— 干脆**多试几种写法**，
-    // 每一轮都用同样的「完整文件名必须相等」过滤，精确性不受影响：
-    //
-    //   1. `"QQ.exe"`  —— 带引号的整名（默认）
-    //   2. `QQ.exe`    —— 不带引号
-    //   3. `"QQ.*"`    —— 主名通配（用户在「查名字」框里输 QQ 走的就是它）
-    //   4. `QQ`        —— 光主名
-    if found.is_empty() && has_ext {
-        let stem = lower.split('.').next().unwrap_or(&lower).to_string();
-        for attempt in [
-            name.to_string(),
-            format!("\"{stem}.*\""),
-            stem.clone(),
-        ] {
-            found = query(&attempt, limit.max(60));
-            if std::env::var_os("GPUI_MENU_DEBUG_PROG").is_some() {
-                eprintln!("[prog] 整名查不到，改用 {attempt:?} -> {} 条", found.len());
-            }
-            if !found.is_empty() {
-                break;
-            }
+        attempts.push(format!("file:{Q}{name}.*{Q}"));
+        attempts.push(format!("file:{name}.*"));
+        attempts.push(format!("*{name}.*"));
+        attempts.push(stem.clone());
+    }
+
+    let mut found: Vec<Hit> = Vec::new();
+    for attempt in &attempts {
+        let hits = query(attempt, limit.max(60));
+        prog_log(&format!("lookup({name:?}) 试 {attempt:?} -> {} 条", hits.len()));
+        if !hits.is_empty() {
+            found = hits;
+            break;
         }
     }
+
     found.retain(|hit| {
         let file = file_name_of(&hit.path).to_ascii_lowercase();
         if has_ext {
             file == lower
         } else {
-            // `notepad.exe` 的主名是 `notepad`
-            let stem = file.split('.').next().unwrap_or(&file);
-            file == lower || stem == lower
+            let file_stem = file.split('.').next().unwrap_or(&file);
+            file == lower || file_stem == lower
         }
     });
     found.truncate(limit);
+    if !found.is_empty() {
+        prog_log(&format!(
+            "   保留：{:?}",
+            found.iter().take(3).map(|hit| hit.path.as_str()).collect::<Vec<_>>()
+        ));
+    }
     found
 }
 
@@ -179,15 +207,20 @@ pub fn lookup(name: &str, limit: usize) -> Vec<Hit> {
 /// 留给之后那个「搜整台电脑文件」的搜索框。
 #[allow(dead_code)]
 pub fn search(keyword: &str, limit: usize) -> Vec<Hit> {
+    const Q: char = '"';
     let keyword = keyword.trim();
     if keyword.is_empty() {
         return Vec::new();
     }
-    let hits = query(keyword, limit);
-    if hits.is_empty() && keyword.contains('.') {
-        // 同 `lookup`：带扩展名的查询有的机器查不出来，退回按主名找
-        if let Some(stem) = keyword.split('.').next().filter(|stem| !stem.is_empty()) {
-            return query(&format!("\"{stem}.*\""), limit);
+    let hits = query(&format!("file:{Q}{keyword}{Q}"), limit);
+    if !hits.is_empty() {
+        return hits;
+    }
+    // 带扩展名查不到就退回主名（同 `lookup` 的理由）
+    if let Some(stem) = keyword.split('.').next().filter(|stem| !stem.is_empty()) {
+        let hits = query(&format!("file:{Q}{stem}.*{Q}"), limit);
+        if !hits.is_empty() {
+            return hits;
         }
     }
     hits
