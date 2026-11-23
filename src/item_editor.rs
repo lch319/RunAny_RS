@@ -23,7 +23,7 @@ use gpui::{
 use crate::chrome::{self, Chrome};
 use crate::settings::run_opts::{OnRun, WindowState};
 use crate::settings::{self, ActionKind, ActionStep, BuiltinAction, ItemKind};
-use crate::settings_ui::{ghost_button, primary_button, segmented, switch};
+use crate::settings_ui::{ghost_button, ghost_button_tagged, primary_button, segmented, switch};
 use crate::text_input::TextInput;
 use crate::theme;
 
@@ -1040,7 +1040,10 @@ impl ItemEditor {
                     .text_color(theme::text_primary())
                     .child(name),
             );
-        head = head.child(ghost_button(
+        // 必须带 tag：不带 tag 的按钮 id 是「文案」拼的，两条动作各有一颗
+        // 「换一个…」就撞成同一个元素，只有第一颗能点（用户就是这么撞到的）
+        head = head.child(ghost_button_tagged(
+            format!("builtin-pick-{index}"),
             if self.picker_for == Some(index) {
                 "收起"
             } else {

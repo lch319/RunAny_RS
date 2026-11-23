@@ -272,6 +272,21 @@ impl MenuState {
     }
 
     /// 鼠标悬停到第 `level` 列的第 `idx` 项；返回是否有变化。
+    /// 指针移到菜单**空白处**（没有落在任何一行上）时调：把比 `level` 更深的
+    /// 展开列收起来。
+    ///
+    /// 多列菜单里，子菜单展开后是盖在右边列上的；光标挪到空白处如果不收，
+    /// 用户就没法点被盖住的那几项。只收起「比当前列更深」的部分，当前列的选择
+    /// 保持不动 —— 移开再移回来，位置不跳。
+    pub fn collapse_below(&mut self, level: usize) -> bool {
+        if self.path.len() <= level + 1 {
+            return false;
+        }
+        self.path.truncate(level + 1);
+        self.scroll.truncate(level + 1);
+        true
+    }
+
     pub fn hover(&mut self, level: usize, idx: usize) -> bool {
         let has_children = self.has_children(level, idx);
         let already = self.path.get(level) == Some(&idx);

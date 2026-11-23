@@ -30,7 +30,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetWindowRect,
     IsIconic, IsWindow, IsWindowVisible, PeekMessageW, RegisterClassW, SetLayeredWindowAttributes,
     SetWindowPos, ShowWindow, TranslateMessage, MSG, PM_REMOVE, SWP_NOACTIVATE,
-    SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, WM_ERASEBKGND, WNDCLASSW, WS_EX_LAYERED,
+    SW_HIDE, SW_SHOWNOACTIVATE, WM_ERASEBKGND, WNDCLASSW, WS_EX_LAYERED,
     WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
@@ -305,24 +305,39 @@ fn run(rx: Receiver<Command>) {
                     ShowWindow(overlay.hwnd, SW_HIDE);
                     continue;
                 }
-                let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-                if GetWindowRect(target as HWND, &mut rect) == 0 {
+                // 用**可见边缘**（DWM 的 extended frame bounds），不是 GetWindowRect：
+                // 后者在 Win10 上含那圈隐形阴影，拿它画框会离窗口边缘差 7~8px，
+                // 看着就是「框和窗口之间有缝」
+                let Some((left, top, width, height)) = crate::win32::window_rect_exact(target)
+                else {
                     ShowWindow(overlay.hwnd, SW_HIDE);
                     continue;
-                }
-                let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
+                };
+                let rect = RECT {
+                    left,
+                    top,
+                    right: left + width,
+                    bottom: top + height,
+                };
                 if width <= 0 || height <= 0 {
                     ShowWindow(overlay.hwnd, SW_HIDE);
                     continue;
                 }
+                // **压在目标窗口上面**：目标此刻是置顶的，覆盖窗口也得是置顶
+                // 才盖得住它。
+                //
+                // 注意 `SetWindowPos` 第二个参数是「插在谁**后面**」—— 传目标窗口
+                // 的话覆盖窗口会排到它**下面**，结果是整个边框看不见，
+                // 只剩窗口外面那圈阴影区域露一点颜色（之前「顶部没边框、有缝」就是这个）。
+                const HWND_TOPMOST: HWND = -1isize as HWND;
                 SetWindowPos(
                     overlay.hwnd,
-                    std::ptr::null_mut(),
+                    HWND_TOPMOST,
                     rect.left,
                     rect.top,
                     width,
                     height,
-                    SWP_NOACTIVATE | SWP_NOZORDER,
+                    SWP_NOACTIVATE,
                 );
                 if overlay.shaped != (width, height) {
                     let thickness = overlay.thickness as i32;

@@ -44,6 +44,10 @@ pub struct ColumnView {
     drag: Option<Drag>,
     /// 跨列悬停的延迟切换（存着才不会在计时途中被丢掉）
     hover_task: Option<Task<()>>,
+    /// 指针在**空白处**待命的代号：一旦有某一行真的被悬停，就 +1 作废上一次
+    blank_gen: u64,
+    /// 「停在空白处就收起深层」的待办
+    blank_task: Option<Task<()>>,
     /// 最后一次收到鼠标移动的时刻：跨列切换要等指针「停下来」才算数
     /// 等待生效的那一行 + 指针「进入这一行」的时刻。
     ///
@@ -65,6 +69,8 @@ impl ColumnView {
             applied_size: None,
             drag: None,
             hover_task: None,
+            blank_gen: 0,
+            blank_task: None,
             pending: None,
             _obs,
         }
@@ -97,6 +103,42 @@ impl ColumnView {
     ///
     /// 判据是「**指针在这一行上停了多久**」（见 `pending`），不是「鼠标停了多久」：
     /// 只要指针还在同一行里，手抖、挪几像素都不重新计时；换到另一行才重新开始。
+    /// 指针在卡片上移动（行与行之间的留白、列表下方的空白都算）。
+    ///
+    /// 多列菜单里子菜单展开后会盖住右边一列：光标停在空白处如果不收，
+    /// 右边那几项就永远点不到（用户报的就是这个）。这里排个 260ms 的待办，
+    /// 期间只要真有某一行被悬停（`blank_gen` 变了）就作废 —— 正常在行上移动
+    /// 不会误收。
+    fn blank_move(&mut self, cx: &mut Context<Self>) {
+        if self.drag.is_some() {
+            return;
+        }
+        let level = self.level;
+        let state = self.state.clone();
+        if state.read(cx).path.len() <= level + 1 {
+            return;
+        }
+        let generation = self.blank_gen;
+        let token = cx.entity().entity_id();
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(260))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.blank_gen != generation {
+                    return;
+                }
+                let changed = this.state.update(cx, |state, _| state.collapse_below(level));
+                if changed {
+                    crate::popup::sync(cx);
+                    cx.notify();
+                }
+            });
+            let _ = token;
+        });
+        self.blank_task = Some(task);
+    }
+
     /// 指针离开这一行（`cancel_hover`）就把这一行的待定项作废。
     ///
     /// 这两个值**必须很小**：手感上「鼠标一停子菜单就该在」。以前是 120/200ms，
@@ -184,6 +226,8 @@ impl ColumnView {
     }
 
     fn apply_hover(&mut self, idx: usize, cx: &mut Context<Self>) {
+        // 指针落在某一行上了：空白处那条「收起深层」的待办作废
+        self.blank_gen = self.blank_gen.wrapping_add(1);
         let level = self.level;
         // 延迟期间菜单可能被筛短了（用户还在打字），越界的行直接忽略
         if self.state.read(cx).entries(level).get(idx).is_none() {
@@ -515,8 +559,10 @@ impl Render for ColumnView {
             // 拖动滚动条时，指针几乎一定已经离开那条 12px 的滑轨了，
             // 所以 move / up 挂在铺满窗口的卡片上（父 hitbox 也在命中链里）。
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _window, cx| {
-                // 指针在卡片上动（行与行之间的留白也算），这里只处理拖滚动条
+                // 指针在卡片上动（行与行之间的留白也算）
                 this.drag_move(event, cx);
+                // 停在空白处 → 把这一列往下的展开收掉，别挡着右边一列
+                this.blank_move(cx);
             }))
             .on_mouse_up(
                 MouseButton::Left,

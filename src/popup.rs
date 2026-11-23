@@ -411,6 +411,11 @@ pub fn open_item_context(cx: &mut App, id: &str) {
                 live.screen = screen;
                 live.scale = scale;
             }
+            // 右键换菜单是一次「窗口原地重建」：位置刚挪、内容刚换，
+            // watchdog 那 60ms 一轮的检查会看到「刚点了一下、光标好像不在窗口上」，
+            // 直接判成「用户点走了」把菜单收掉 —— 用户看到的是一闪而过。
+            // 给一段宽限期（和刚弹出时同一套机制），这段时间内的失焦/点击不算数。
+            host.grace = Some(std::time::Instant::now());
         });
         let state = cx.global::<MenuHost>().state.clone();
         state.update(cx, |state, cx| {

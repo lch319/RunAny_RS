@@ -428,30 +428,9 @@ pub static BUILTINS: &[BuiltinDef] = &[
     BuiltinDef {
         id: "win.close",
         name: "关闭窗口",
-        desc: "给前台窗口发 Alt+F4",
+        desc: "关闭窗口（默认关前台那个）",
         category: Category::Window,
-        params: NONE,
-    },
-    BuiltinDef {
-        id: "win.left-half",
-        name: "靠左半屏",
-        desc: "前台窗口铺满左半边工作区",
-        category: Category::Window,
-        params: NONE,
-    },
-    BuiltinDef {
-        id: "win.right-half",
-        name: "靠右半屏",
-        desc: "前台窗口铺满右半边工作区",
-        category: Category::Window,
-        params: NONE,
-    },
-    BuiltinDef {
-        id: "win.center",
-        name: "窗口居中",
-        desc: "把前台窗口挪到当前屏幕中间（大小不变）",
-        category: Category::Window,
-        params: NONE,
+        params: &[P_TARGET, P_MATCH],
     },
     BuiltinDef {
         id: "win.switch",
@@ -1149,10 +1128,20 @@ pub fn execute(id: &str, params: &BTreeMap<String, String>) -> Result<(), String
                 Err("仅 Windows".into())
             }
         }
-        "win.close" => combo(&[Key::Alt, Key::Func(0x73)]), // Alt+F4
-        "win.left-half" => half_screen(true),
-        "win.right-half" => half_screen(false),
-        "win.center" => center_window(),
+        "win.close" => {
+            #[cfg(windows)]
+            {
+                let hwnd = target_window(&values)?;
+                // 先把这个窗口切成前台，再发 Alt+F4，否则关掉的是别人
+                crate::win32::set_foreground(hwnd);
+                std::thread::sleep(std::time::Duration::from_millis(60));
+                combo(&[Key::Alt, Key::Func(0x73)])
+            }
+            #[cfg(not(windows))]
+            {
+                Err("仅 Windows".into())
+            }
+        }
         "win.switch" => combo(&[Key::Alt, Key::Tab]),
 
         // ---- 窗口：移动 / 尺寸 / 显示器 ----
