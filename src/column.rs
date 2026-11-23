@@ -48,6 +48,8 @@ pub struct ColumnView {
     blank_gen: u64,
     /// 「停在空白处就收起深层」的待办
     blank_task: Option<Task<()>>,
+    /// 指针此刻停在哪一行（None = 在留白 / 不在这一列上）
+    hovered_row: Option<usize>,
     /// 最后一次收到鼠标移动的时刻：跨列切换要等指针「停下来」才算数
     /// 等待生效的那一行 + 指针「进入这一行」的时刻。
     ///
@@ -71,6 +73,7 @@ impl ColumnView {
             hover_task: None,
             blank_gen: 0,
             blank_task: None,
+            hovered_row: None,
             pending: None,
             _obs,
         }
@@ -113,19 +116,30 @@ impl ColumnView {
         if self.drag.is_some() {
             return;
         }
+        // 指针正停在某一行上：这是在点菜，不是「停在留白处」，别排待办。
+        // 少了这一条，指针停在有子菜单的那行 260ms 就会被收起再展开 —— 抽搐。
+        if self.hovered_row.is_some() {
+            return;
+        }
         let level = self.level;
         let state = self.state.clone();
         if state.read(cx).path.len() <= level + 1 {
             return;
         }
         let generation = self.blank_gen;
-        let token = cx.entity().entity_id();
+        let hwnd = self.hwnd.unwrap_or(0);
         let task = cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(260))
                 .await;
             let _ = this.update(cx, |this, cx| {
-                if this.blank_gen != generation {
+                // 这期间碰过任何一行，或者现在指针就在某一行上 → 不是在留白处
+                if this.blank_gen != generation || this.hovered_row.is_some() {
+                    return;
+                }
+                // 光标已经跑到别的窗口（比如进了展开的子菜单）→ 更不能收，
+                // 一收就把用户正指着的子菜单关掉了（「移进去就消失」就是这个）
+                if !crate::win32::cursor_in_window(hwnd) {
                     return;
                 }
                 let changed = this.state.update(cx, |state, _| state.collapse_below(level));
@@ -134,7 +148,6 @@ impl ColumnView {
                     cx.notify();
                 }
             });
-            let _ = token;
         });
         self.blank_task = Some(task);
     }
@@ -149,6 +162,13 @@ impl ColumnView {
     const HOVER_REST_FAR: Duration = Duration::from_millis(70);
 
     fn hover(&mut self, idx: usize, cx: &mut Context<Self>) {
+        // **任何一次**行悬停都作废「空白处收起」的待办。
+        //
+        // 之前只在 `apply_hover` 里作废，可是指针在同一行里挪动时 `hover()` 会
+        // 提前 return（已经是当前项了），作废根本没发生 —— 于是 260ms 一到照样
+        // 收起，收起后指针又在一个行上，立刻再展开：用户看到的就是「一直抽搐」。
+        self.blank_gen = self.blank_gen.wrapping_add(1);
+        self.hovered_row = Some(idx);
         // 拖滚动条时鼠标划过行不该改变高亮（否则会把沿途的子菜单一个个展开）
         if self.drag.is_some() {
             return;
@@ -215,6 +235,9 @@ impl ColumnView {
     /// `false` 清掉，B 就永远等不到生效 —— 用户看到的就是「指针明明停在右列那一行
     /// 上，子菜单死活不出来」。
     fn cancel_hover(&mut self, idx: usize, _cx: &mut Context<Self>) {
+        if self.hovered_row == Some(idx) {
+            self.hovered_row = None;
+        }
         if self.pending.map(|(row, _)| row) != Some(idx) {
             return;
         }
@@ -226,8 +249,6 @@ impl ColumnView {
     }
 
     fn apply_hover(&mut self, idx: usize, cx: &mut Context<Self>) {
-        // 指针落在某一行上了：空白处那条「收起深层」的待办作废
-        self.blank_gen = self.blank_gen.wrapping_add(1);
         let level = self.level;
         // 延迟期间菜单可能被筛短了（用户还在打字），越界的行直接忽略
         if self.state.read(cx).entries(level).get(idx).is_none() {

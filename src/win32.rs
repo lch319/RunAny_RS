@@ -4052,6 +4052,23 @@ fn monitor_areas() -> Vec<(i32, i32, i32, i32)> {
     ///
     /// 悬停提示要在「鼠标移出菜单」时自己收起来，而 GPUI 的 `on_hover(false)`
     /// 在鼠标直接离开窗口时并不可靠 —— 这里用系统给的「光标下是哪个窗口」兜底。
+    /// 光标现在是不是落在这扇窗口（含其子窗口）里。
+    pub fn cursor_in_window(hwnd: isize) -> bool {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{WindowFromPoint, GetAncestor, GA_ROOT};
+        if hwnd == 0 {
+            return false;
+        }
+        let (x, y) = cursor_position();
+        unsafe {
+            let under = WindowFromPoint(POINT { x, y });
+            if under.is_null() {
+                return false;
+            }
+            let root = GetAncestor(under, GA_ROOT);
+            root as isize == hwnd
+        }
+    }
+
     pub fn cursor_over_self() -> bool {
         let (x, y) = cursor_position();
         unsafe {
@@ -4111,7 +4128,7 @@ pub use imp::{
     monitor_off, empty_recycle_bin, ahk_from_registry,
     make_click_through, set_click_through,
     resize_window, fit_client_size, ime_composition_len, send_text_with_keys, paste_text,
-    cursor_position_physical, screen_size_physical, set_topmost, set_window_border,
+    cursor_position_physical, screen_size_physical, set_topmost, set_window_border, cursor_in_window,
     parse_hex_color, clipboard_snapshot, clipboard_restore,
     work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
