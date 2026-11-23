@@ -371,7 +371,7 @@ pub fn start(cx: &mut gpui::App) {
 
 /// 命中：把这条规则自己的菜单项按顺序跑一遍，并按设置弹一条提示。
 fn fire(cx: &mut gpui::App, target: &str, label: &str) {
-    // 先拿规则自己的项（新写法）
+    // 规则的菜单项挂在根层的隐藏容器里（`__rule__<规则id>`）
     let (actions, rule_name) = settings::read(|settings| {
         let rule = settings
             .auto_rules
@@ -380,7 +380,7 @@ fn fire(cx: &mut gpui::App, target: &str, label: &str) {
         match rule {
             Some(rule) => {
                 let mut actions = Vec::new();
-                for item in rule.items.iter().filter(|item| item.enabled) {
+                for item in settings.rule_items(&rule.id).iter().filter(|item| item.enabled) {
                     actions.extend(item.actions.iter().cloned());
                 }
                 (actions, rule.name.clone())

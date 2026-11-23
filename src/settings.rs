@@ -38,7 +38,18 @@ pub const MAGIC_ID: &str = "__magic__";
 /// 这两支「寄居」在内存树的根层，但它们不是菜单的一部分：
 /// 托盘右键菜单（`TRAY_ID`）和 一键直达的直达项（`MAGIC_ID`）。
 fn is_hidden_branch(id: &str) -> bool {
-    id == TRAY_ID || id == MAGIC_ID
+    id == TRAY_ID || id == MAGIC_ID || id.starts_with(RULE_PREFIX)
+}
+
+/// 自动规则的菜单项挂在根层的一个**隐藏子菜单**里：id 带这个前缀。
+///
+/// 为什么要挂进 `items`：这样「添加菜单项 / 子菜单 / 分隔线 / 拖动排序 /
+/// 编辑动作」全都能直接复用菜单项页那一整套，不用为规则另写一份。
+pub const RULE_PREFIX: &str = "__rule__";
+
+/// 某条规则的容器 id。
+pub fn rule_container_id(rule_id: &str) -> String {
+    format!("{RULE_PREFIX}{rule_id}")
 }
 
 /// 某个 id 是不是那两支隐藏分支（界面判断「这是特殊项」用）。
@@ -2315,11 +2326,54 @@ impl MenuSettings {
         self.items.push(tray);
     }
 
+    /// 把规则自己的 `items` 搬进根层的隐藏容器（老配置兼容，幂等）。
+    ///
+    /// 搬进隐藏容器之后，「添加菜单项 / 子菜单 / 拖动排序 / 编辑动作」全都能
+    /// 直接复用菜单项页那一整套，不用为规则另写一份界面。
+    pub fn migrate_rule_items(&mut self) {
+        for index in 0..self.auto_rules.len() {
+        let rule_id = self.auto_rules[index].id.clone();
+        let pending = std::mem::take(&mut self.auto_rules[index].items);
+        let container = rule_container_id(&rule_id);
+        if !self.items.iter().any(|item| item.id == container) {
+            let mut node = ItemSetting::item(container.clone(), "自动规则菜单项");
+            node.kind = ItemKind::Submenu;
+            self.items.push(node);
+        }
+            if let Some(node) = self.items.iter_mut().find(|item| item.id == container) {
+                node.children.extend(pending);
+            }
+        }
+    }
+
     /// 所有配了热字符串的节点（按树的顺序，托盘那一支不算）。
     pub fn hotstring_phrases(&self) -> Vec<HotstringPhrase> {
         let mut out = Vec::new();
         collect_hotstrings(&self.items, &mut out);
         out
+    }
+
+    /// 某条规则的菜单项容器（没有就建一个空的）。
+    pub fn ensure_rule_container(&mut self, rule_id: &str) -> String {
+        let container = rule_container_id(rule_id);
+        if self.items.iter().any(|item| item.id == container) {
+            return container;
+        }
+        let mut item = ItemSetting::item(container.clone(), "自动规则菜单项");
+        item.kind = ItemKind::Submenu;
+        item.enabled = true;
+        self.items.push(item);
+        container
+    }
+
+    /// 某条规则自己的菜单项（容器里的 children）。
+    pub fn rule_items(&self, rule_id: &str) -> &[ItemSetting] {
+        let container = rule_container_id(rule_id);
+        self.items
+            .iter()
+            .find(|item| item.id == container)
+            .map(|item| item.children.as_slice())
+            .unwrap_or(&[])
     }
 
     // ---- 自动规则：增删改序（界面里用） ----
@@ -3077,6 +3131,8 @@ impl MenuSettings {
             item.migrate();
         }
         self.ensure_unique_ids();
+        // 规则自己的菜单项搬进隐藏容器（必须在归一之前：归一不看隐藏分支）
+        self.migrate_rule_items();
         self.normalize_tree();
         // 悬停提示：老版本只有「显示动作 / 快捷键 / 备注 / 类型」四个开关，
         // 现在是一份模板 —— 把它们拼成模板，之后界面里改模板说了算

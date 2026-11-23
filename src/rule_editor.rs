@@ -1,7 +1,11 @@
-//! 自动规则的编辑窗口（独立窗口，和「编辑菜单项」同一套外壳）。
+//! 自动规则的编辑窗口（独立窗口，和「编辑菜单项」同一套外壳与布局）。
 //!
-//! 左边管规则本身（名称 / 检测次数 / 间隔 / 条件），右边管这条规则**自己的**
-//! 菜单项列表（可拖动排序）—— 和主菜单、托盘那套完全独立。
+//! - 顶部：标题栏（拖动 / 最小化 / 最大化 / 关闭）
+//! - 左栏：规则本身（名称、检测次数与间隔、条件组合、条件表）—— **草稿**，
+//!   点「应用 / 保存」才写回去，点「取消」直接丢
+//! - 右栏：这条规则自己的菜单项，直接嵌一棵 `TreeView`（和「菜单项」页同一套：
+//!   添加菜单项 / 子菜单 / 分隔线 / 多列符、拖动排序、编辑动作都在），改动即时生效
+//! - 底部：保存 / 取消 / 应用
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -9,26 +13,24 @@ use std::rc::Rc;
 
 use gpui::prelude::*;
 use gpui::{
-    div, px, size, AnyElement, App, Bounds, Context, Entity, IntoElement, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Render, SharedString, Styled,
-    Subscription, Window, WindowBounds, WindowOptions,
+    div, px, size, AnyElement, App, Bounds, Context, Entity, IntoElement, Render, SharedString,
+    Styled, Subscription, Window, WindowBounds, WindowOptions,
 };
 
-use crate::settings::{self, ActionKind, ActionStep, AutoCondition, ItemSetting, ItemKind};
-use crate::settings_ui::{ghost_button_tagged, segmented};
+use crate::settings::{self, AutoCondition, AutoRule};
+use crate::settings_ui::{ghost_button_tagged, primary_button, segmented};
 use crate::theme;
 
-const WIDTH: f32 = 920.0;
-const HEIGHT: f32 = 660.0;
-const MIN_WIDTH: f32 = 760.0;
-const MIN_HEIGHT: f32 = 480.0;
+const WIDTH: f32 = 1040.0;
+const HEIGHT: f32 = 700.0;
+const MIN_WIDTH: f32 = 860.0;
+const MIN_HEIGHT: f32 = 520.0;
 
-struct Handle(gpui::AnyWindowHandle);
-struct RuleEditorHandle(Handle);
+struct RuleEditorHandle(gpui::AnyWindowHandle);
 impl gpui::Global for RuleEditorHandle {}
 
 pub fn open(rule_id: &str, cx: &mut App) {
-    if let Some(handle) = cx.try_global::<RuleEditorHandle>().map(|handle| &handle.0 .0) {
+    if let Some(handle) = cx.try_global::<RuleEditorHandle>().map(|handle| &handle.0) {
         let target = rule_id.to_string();
         let alive = handle
             .update(cx, |view, window, cx| {
@@ -42,6 +44,9 @@ pub fn open(rule_id: &str, cx: &mut App) {
             return;
         }
     }
+
+    // 容器先备好：右侧那棵树要有东西可挂
+    let container = settings::update(cx, |settings| settings.ensure_rule_container(rule_id));
 
     let mut width = WIDTH;
     let mut height = HEIGHT;
@@ -70,13 +75,13 @@ pub fn open(rule_id: &str, cx: &mut App) {
             window_background: gpui::WindowBackgroundAppearance::Opaque,
             ..Default::default()
         },
-        move |_window, cx| cx.new(|cx| RuleEditor::new(id, hwnd_cell, cx)),
+        move |_window, cx| cx.new(|cx| RuleEditor::new(id, container, hwnd_cell, cx)),
     );
 
     let Ok(handle) = opened else {
         return;
     };
-    cx.set_global(RuleEditorHandle(Handle(gpui::AnyWindowHandle::from(handle))));
+    cx.set_global(RuleEditorHandle(gpui::AnyWindowHandle::from(handle)));
 
     let hwnd = crate::win32::zed_window_handles()
         .into_iter()
@@ -89,53 +94,90 @@ pub fn open(rule_id: &str, cx: &mut App) {
 
 pub struct RuleEditor {
     rule_id: String,
+    container_id: String,
+    /// 左侧字段的草稿：点「应用 / 保存」才落盘
+    draft: AutoRule,
+    dirty: bool,
     inputs: HashMap<String, Entity<crate::text_input::TextInput>>,
     subs: Vec<Subscription>,
-    /// 展开变量面板的条件下标
     picker: Option<usize>,
-    /// 拖动中的菜单项下标 + 落点
-    drag: Option<usize>,
-    drop: Option<usize>,
-    _hwnd: Rc<Cell<Option<isize>>>,
+    tree: Entity<crate::tree_view::TreeView>,
+    hwnd: Rc<Cell<Option<isize>>>,
 }
 
 impl RuleEditor {
     fn new(
         rule_id: String,
+        container_id: String,
         hwnd: Rc<Cell<Option<isize>>>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let _ = cx;
+        let draft = settings::read(|settings| {
+            settings
+                .auto_rules
+                .iter()
+                .find(|rule| rule.id == rule_id)
+                .cloned()
+                .unwrap_or_default()
+        });
+        let scope = crate::tree_view::Scope::Submenu(container_id.clone());
+        let tree = cx.new(|cx| crate::tree_view::TreeView::new(scope, cx));
         Self {
             rule_id,
+            container_id,
+            draft,
+            dirty: false,
             inputs: HashMap::new(),
             subs: Vec::new(),
             picker: None,
-            drag: None,
-            drop: None,
-            _hwnd: hwnd,
+            tree,
+            hwnd,
         }
     }
 
     fn set_target(&mut self, rule_id: String, cx: &mut Context<Self>) {
+        let (draft, container) = settings::read(|settings| {
+            (
+                settings
+                    .auto_rules
+                    .iter()
+                    .find(|rule| rule.id == rule_id)
+                    .cloned()
+                    .unwrap_or_default(),
+                settings::rule_container_id(&rule_id),
+            )
+        });
         self.rule_id = rule_id;
+        self.container_id = container;
+        self.draft = draft;
+        self.dirty = false;
         self.inputs.clear();
         self.subs.clear();
         self.picker = None;
+        let scope = crate::tree_view::Scope::Submenu(self.container_id.clone());
+        self.tree = cx.new(|cx| crate::tree_view::TreeView::new(scope, cx));
         cx.notify();
     }
 
-    fn rule(&self) -> Option<settings::AutoRule> {
-        settings::read(|settings| {
-            settings
-                .auto_rules
-                .iter()
-                .find(|rule| rule.id == self.rule_id)
-                .cloned()
-        })
+    /// 把草稿写回设置（菜单项那一侧是即时写的，不经过草稿）。
+    fn commit(&mut self, cx: &mut Context<Self>) {
+        if !self.dirty {
+            return;
+        }
+        let draft = self.draft.clone();
+        settings::update(cx, |settings| {
+            if let Some(rule) = settings.auto_rules.iter_mut().find(|r| r.id == draft.id) {
+                rule.name = draft.name.clone();
+                rule.rounds = draft.rounds;
+                rule.interval_secs = draft.interval_secs;
+                rule.any = draft.any;
+                rule.conditions = draft.conditions.clone();
+            }
+        });
+        self.dirty = false;
+        cx.notify();
     }
 
-    /// 懒创建输入框；`key` 的格式和落盘字段一一对应。
     fn field(
         &mut self,
         key: String,
@@ -154,117 +196,118 @@ impl RuleEditor {
             if seen.replace(Some(text.clone())).as_deref() == Some(text.as_str()) {
                 return;
             }
-            view.apply(key_for_observer.clone(), text, cx);
+            view.apply_draft(key_for_observer.clone(), text, cx);
         });
         self.subs.push(sub);
         self.inputs.insert(key, entity.clone());
         entity
     }
 
-    /// 字段改动落到设置里。键：`name|规则id`、`rounds|规则id`、`item|规则id|项下标` 等。
-    fn apply(&mut self, key: String, text: String, cx: &mut Context<Self>) {
+    /// 输入改动只动草稿。
+    fn apply_draft(&mut self, key: String, text: String, cx: &mut Context<Self>) {
         let mut parts = key.split('|');
-        let field = parts.next().unwrap_or_default().to_string();
-        let rule_id = parts.next().unwrap_or_default().to_string();
+        let field = parts.next().unwrap_or_default();
         let index = parts.next().and_then(|value| value.parse::<usize>().ok());
-        settings::update(cx, move |settings| {
-            let Some(rule) = settings.auto_rules.iter_mut().find(|rule| rule.id == rule_id) else {
-                return;
-            };
-            match field.as_str() {
-                "name" => rule.name = text,
-                "rounds" => rule.rounds = text.trim().parse().unwrap_or(1).max(1),
-                "interval" => rule.interval_secs = text.trim().parse().unwrap_or(10),
-                "cond" => {
-                    if let Some(cond) = index.and_then(|i| rule.conditions.get_mut(i)) {
-                        cond.value = text;
-                    }
+        match field {
+            "name" => self.draft.name = text,
+            "rounds" => self.draft.rounds = text.trim().parse().unwrap_or(1).max(1),
+            "interval" => self.draft.interval_secs = text.trim().parse().unwrap_or(10),
+            "cond" => {
+                if let Some(cond) = index.and_then(|i| self.draft.conditions.get_mut(i)) {
+                    cond.value = text;
                 }
-                "item" => {
-                    if let Some(item) = index.and_then(|i| rule.items.get_mut(i)) {
-                        item.label = text;
-                    }
-                }
-                "action" => {
-                    if let Some(item) = index.and_then(|i| rule.items.get_mut(i)) {
-                        if let Some(step) = item.actions.first_mut() {
-                            step.value = text;
-                        }
-                    }
-                }
-                _ => {}
             }
-        });
-    }
-
-    fn add_condition(&mut self, cx: &mut Context<Self>) {
-        let rule_id = self.rule_id.clone();
-        settings::update(cx, |settings| {
-            if let Some(rule) = settings.auto_rules.iter_mut().find(|rule| rule.id == rule_id) {
-                rule.conditions.push(AutoCondition {
-                    var: "wifi".to_string(),
-                    op: "eq".to_string(),
-                    value: String::new(),
-                });
-            }
-        });
-        cx.notify();
-    }
-
-    fn add_item(&mut self, cx: &mut Context<Self>) {
-        let rule_id = self.rule_id.clone();
-        settings::update(cx, |settings| {
-            if let Some(rule) = settings.auto_rules.iter_mut().find(|rule| rule.id == rule_id) {
-                let mut item = ItemSetting::item(
-                    format!("rule-item-{}", rule.items.len() + 1),
-                    "新菜单项",
-                );
-                item.kind = ItemKind::Item;
-                item.actions = vec![ActionStep::new(ActionKind::Run, "")];
-                rule.items.push(item);
-            }
-        });
+            _ => return,
+        }
+        self.dirty = true;
         cx.notify();
     }
 }
 
 impl Render for RuleEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let _ = window;
-        let Some(rule) = self.rule() else {
-            return div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(12.))
-                .text_color(theme::ui_text_tertiary())
-                .child(crate::i18n::t("这条规则已经删掉了"))
-                .into_any_element();
+        let chrome = crate::chrome::Chrome::new(self.hwnd.clone());
+        let maximized = window.is_maximized();
+        let title = if self.draft.name.trim().is_empty() {
+            crate::i18n::t("编辑自动规则").to_string()
+        } else {
+            self.draft.name.clone()
         };
 
-        // ---------- 左栏：规则本身 ----------
+        // ---- 标题栏
+        let chrome_max = chrome.clone();
+        let header = div()
+            .id("rule-editor-header")
+            .h(px(40.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .px(px(6.))
+            .border_b_1()
+            .border_color(theme::border())
+            .bg(theme::surface())
+            .child(
+                crate::chrome::drag_area("rule-editor-titlebar", &chrome)
+                    .flex_1()
+                    .min_w_0()
+                    .child(crate::chrome::title_row(true, crate::i18n::t("编辑自动规则"))),
+            )
+            .child(
+                div()
+                    .max_w(px(240.))
+                    .flex_none()
+                    .pr(px(6.))
+                    .text_size(px(11.))
+                    .text_color(theme::ui_text_tertiary())
+                    .truncate()
+                    .child(title),
+            )
+            .child(crate::chrome::caption_button(
+                "—",
+                "rule-editor-min",
+                |_e, window, _cx| {
+                    window.minimize_window();
+                },
+            ))
+            .child(crate::chrome::caption_button(
+                if maximized { "❐" } else { "□" },
+                "rule-editor-max",
+                move |_e, window, _cx| chrome_max.toggle_maximize(window),
+            ))
+            .child(crate::chrome::caption_button(
+                "✕",
+                "rule-editor-close",
+                |_e, window, _cx| window.remove_window(),
+            ));
+
+        // ---- 左栏（草稿）
         let name_input = self.field(
-            format!("name|{}", rule.id),
-            rule.name.clone(),
+            "name|".to_string(),
+            self.draft.name.clone(),
             "比如「连上公司 WiFi 就挂代理」",
             cx,
         );
         let rounds_input = self.field(
-            format!("rounds|{}", rule.id),
-            rule.rounds.max(1).to_string(),
+            "rounds|".to_string(),
+            self.draft.rounds.max(1).to_string(),
             "次数",
             cx,
         );
         let interval_input = self.field(
-            format!("interval|{}", rule.id),
-            rule.interval_secs.to_string(),
+            "interval|".to_string(),
+            self.draft.interval_secs.to_string(),
             "秒",
             cx,
         );
 
-        let rule_id = rule.id.clone();
-        let mut left = div().w(px(430.)).flex_none().h_full().flex().flex_col().gap(px(8.));
+        let mut left = div()
+            .w(px(400.))
+            .flex_none()
+            .h_full()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .overflow_hidden();
         left = left
             .child(label("规则名称"))
             .child(boxed(name_input))
@@ -288,24 +331,15 @@ impl Render for RuleEditor {
                     .child(segmented(
                         "rule-combine",
                         &[(0, crate::i18n::t("全部满足")), (1, crate::i18n::t("任一满足"))],
-                        if rule.any { 1 } else { 0 },
-                        cx.listener(move |this, picked: &u32, window, cx| {
-                            let any = *picked == 1;
-                            let rule_id = this.rule_id.clone();
-                            settings::update(cx, |settings| {
-                                if let Some(rule) =
-                                    settings.auto_rules.iter_mut().find(|r| r.id == rule_id)
-                                {
-                                    rule.any = any;
-                                }
-                            });
-                            window.refresh();
+                        if self.draft.any { 1 } else { 0 },
+                        cx.listener(|this, picked: &u32, _window, cx| {
+                            this.draft.any = *picked == 1;
+                            this.dirty = true;
                             cx.notify();
                         }),
                     )),
             );
 
-        // 条件表
         let mut conditions = div()
             .w_full()
             .flex()
@@ -315,30 +349,34 @@ impl Render for RuleEditor {
             .border_1()
             .border_color(theme::border())
             .p(px(6.));
-        if rule.conditions.is_empty() {
+        if self.draft.conditions.is_empty() {
             conditions = conditions.child(
                 div()
                     .text_size(px(10.))
                     .text_color(theme::ui_text_tertiary())
-                    .child(crate::i18n::t("还没有条件")),
+                    .child(crate::i18n::t("还没有条件，点下面的「增加条件」")),
             );
         }
-        for (index, cond) in rule.conditions.iter().enumerate() {
-            conditions = conditions.child(self.condition_row(&rule, index, cond, cx));
+        for index in 0..self.draft.conditions.len() {
+            conditions = conditions.child(self.condition_row(index, cx));
         }
-        let mut add_cond = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-            this.add_condition(cx);
-            window.refresh();
-        });
         conditions = conditions.child(ghost_button_tagged(
-            format!("rule-add-cond|{}", rule.id),
+            "rule-add-condition",
             crate::i18n::t("增加条件"),
-            move |event, window, cx| add_cond(event, window, cx),
+            cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+                this.draft.conditions.push(AutoCondition {
+                    var: "wifi".to_string(),
+                    op: "eq".to_string(),
+                    value: String::new(),
+                });
+                this.dirty = true;
+                cx.notify();
+            }),
         ));
         left = left.child(conditions);
 
-        // ---------- 右栏：规则自己的菜单项 ----------
-        let mut right = div()
+        // ---- 右栏（和菜单项页同一棵树）
+        let right = div()
             .flex_1()
             .min_w_0()
             .h_full()
@@ -347,128 +385,121 @@ impl Render for RuleEditor {
             .gap(px(6.))
             .pl(px(12.))
             .border_l_1()
-            .border_color(theme::border());
-        right = right.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(
-                    div()
-                        .flex_1()
-                        .text_size(px(11.5))
-                        .text_color(theme::text_primary())
-                        .child(crate::i18n::t("要执行的菜单项")),
-                )
-                .child(
-                    div()
-                        .text_size(px(9.5))
-                        .text_color(theme::ui_text_tertiary())
-                        .child(crate::i18n::t("按住 ⠿ 可拖动排序；命中后按顺序执行")),
-                ),
-        );
-
-        let mut list = div()
-            .flex_1()
-            .min_h(px(0.))
-            .w_full()
-            .flex()
-            .flex_col()
-            .gap(px(5.))
-            .overflow_hidden();
-        if rule.items.is_empty() {
-            list = list.child(
+            .border_color(theme::border())
+            .child(
                 div()
-                    .text_size(px(10.5))
-                    .text_color(theme::ui_text_tertiary())
-                    .child(crate::i18n::t("还没有菜单项，点左下角「添加菜单项」")),
-            );
-        }
-        for (index, item) in rule.items.iter().enumerate() {
-            list = list.child(self.item_row(&rule, index, item, cx));
-        }
-        let list = list
-            .on_mouse_up(
-                MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, window, cx| {
-                    let Some(from) = this.drag.take() else {
-                        return;
-                    };
-                    if let Some(to) = this.drop.take() {
-                        if from != to {
-                            let rule_id = this.rule_id.clone();
-                            settings::update(cx, |settings| {
-                                if let Some(rule) =
-                                    settings.auto_rules.iter_mut().find(|r| r.id == rule_id)
-                                {
-                                    if from < rule.items.len() {
-                                        let item = rule.items.remove(from);
-                                        let to = to.min(rule.items.len());
-                                        rule.items.insert(to, item);
-                                    }
-                                }
-                            });
-                            this.inputs.clear();
-                        }
-                    }
-                    window.refresh();
-                    cx.notify();
-                }),
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(px(11.5))
+                            .text_color(theme::text_primary())
+                            .child(crate::i18n::t("要执行的菜单项")),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(9.5))
+                            .text_color(theme::ui_text_tertiary())
+                            .child(crate::i18n::t(
+                                "和「菜单项」页一样操作；命中后按顺序执行（这一侧的改动即时生效）",
+                            )),
+                    ),
             )
-            .on_mouse_up_out(
-                MouseButton::Left,
-                cx.listener(|this, _: &MouseUpEvent, window, cx| {
-                    if this.drag.take().is_some() {
-                        this.drop = None;
-                        window.refresh();
-                        cx.notify();
-                    }
-                }),
+            .child(
+                div()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .w_full()
+                    .child(self.tree.clone()),
             );
-        right = right.child(list);
 
-        let mut add_item = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-            this.add_item(cx);
-            window.refresh();
-        });
-        right = right.child(ghost_button_tagged(
-            format!("rule-add-item|{}", rule.id),
-            crate::i18n::t("添加菜单项"),
-            move |event, window, cx| add_item(event, window, cx),
-        ));
+        // ---- 底部按钮
+        let footer = div()
+            .h(px(46.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .px(px(14.))
+            .border_t_1()
+            .border_color(theme::border())
+            .bg(theme::surface())
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(px(10.))
+                    .text_color(if self.dirty {
+                        theme::accent()
+                    } else {
+                        theme::ui_text_tertiary()
+                    })
+                    .child(if self.dirty {
+                        crate::i18n::t("有未应用的改动：点「应用」写回，或「保存」写回并关闭")
+                            .to_string()
+                    } else {
+                        crate::i18n::t("左边这些改动点「应用 / 保存」才生效").to_string()
+                    }),
+            )
+            .child(ghost_button_tagged(
+                "rule-cancel",
+                crate::i18n::t("取消"),
+                cx.listener(|_this, _: &gpui::ClickEvent, window, _cx| {
+                    window.remove_window();
+                }),
+            ))
+            .child(ghost_button_tagged(
+                "rule-apply",
+                crate::i18n::t("应用"),
+                cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                    this.commit(cx);
+                    window.refresh();
+                }),
+            ))
+            .child(primary_button(
+                crate::i18n::t("保存"),
+                cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                    this.commit(cx);
+                    window.remove_window();
+                }),
+            ));
 
         div()
             .size_full()
             .flex()
-            .gap(px(12.))
-            .p(px(14.))
+            .flex_col()
             .bg(theme::surface_window())
-            .child(left)
-            .child(right)
+            .child(header)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .flex()
+                    .gap(px(12.))
+                    .p(px(14.))
+                    .child(left)
+                    .child(right),
+            )
+            .child(footer)
             .into_any_element()
     }
 }
 
 impl RuleEditor {
-    /// 一行条件：变量按钮 + 比较（分段）+ 值 + 删除。
-    fn condition_row(
-        &mut self,
-        rule: &settings::AutoRule,
-        index: usize,
-        cond: &AutoCondition,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let rule_id = rule.id.clone();
+    /// 一行条件（改的是草稿）。
+    fn condition_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let cond = self.draft.conditions[index].clone();
         let picker_open = self.picker == Some(index);
-        let mut row = div().flex().items_center().gap(px(4.)).w_full().min_w_0();
 
-        // 变量：点开面板
-        let id_var = rule_id.clone();
+        let mut row = div().flex().items_center().gap(px(4.)).w_full().min_w_0();
         row = row.child(
             div()
                 .id(SharedString::from(format!("rule-var-{index}")))
                 .flex_none()
-                .w(px(112.))
+                .w(px(104.))
                 .h(px(24.))
                 .px(px(6.))
                 .flex()
@@ -486,19 +517,16 @@ impl RuleEditor {
                 .text_size(px(10.5))
                 .child(crate::autorule::variable_label(&cond.var))
                 .child(div().text_color(theme::ui_text_tertiary()).child("▾"))
-                .on_click(cx.listener(move |this, _: &gpui::ClickEvent, window, cx| {
-                    let _ = &id_var;
+                .on_click(cx.listener(move |this, _: &gpui::ClickEvent, _window, cx| {
                     this.picker = if this.picker == Some(index) {
                         None
                     } else {
                         Some(index)
                     };
-                    window.refresh();
                     cx.notify();
                 })),
         );
 
-        // 比较：6 段
         let mut options: Vec<(u32, &'static str)> = Vec::new();
         for (position, (_, label)) in crate::autorule::OPS.iter().enumerate() {
             options.push((position as u32, label));
@@ -507,38 +535,25 @@ impl RuleEditor {
             .iter()
             .position(|(key, _)| *key == cond.op)
             .unwrap_or(0) as u32;
-        let id_op = rule_id.clone();
         row = row.child(segmented(
             "rule-op",
             &options,
             current,
-            cx.listener(move |_this, picked: &u32, window, cx| {
+            cx.listener(move |this, picked: &u32, _window, cx| {
                 let op = crate::autorule::OPS
                     .get(*picked as usize)
                     .map(|(key, _)| key.to_string())
                     .unwrap_or_else(|| "eq".to_string());
-                let rule_id = id_op.clone();
-                settings::update(cx, |settings| {
-                    if let Some(rule) = settings.auto_rules.iter_mut().find(|r| r.id == rule_id) {
-                        if let Some(cond) = rule.conditions.get_mut(index) {
-                            cond.op = op;
-                        }
-                    }
-                });
-                window.refresh();
+                if let Some(cond) = this.draft.conditions.get_mut(index) {
+                    cond.op = op;
+                }
+                this.dirty = true;
                 cx.notify();
             }),
         ));
 
-        let value_input = self.field(
-            format!("cond|{}|{}", rule.id, index),
-            cond.value.clone(),
-            "值",
-            cx,
-        );
+        let value_input = self.field(format!("cond|{index}"), cond.value.clone(), "值", cx);
         row = row.child(div().flex_1().min_w_0().child(boxed(value_input)));
-
-        let id_del = rule_id.clone();
         row = row.child(
             div()
                 .id(SharedString::from(format!("rule-delcond-{index}")))
@@ -553,19 +568,13 @@ impl RuleEditor {
                 .text_color(theme::ui_text_tertiary())
                 .hover(|style| style.bg(theme::surface_hover()))
                 .child("✕")
-                .on_click(cx.listener(move |this, _: &gpui::ClickEvent, window, cx| {
-                    let rule_id = id_del.clone();
-                    settings::update(cx, |settings| {
-                        if let Some(rule) =
-                            settings.auto_rules.iter_mut().find(|r| r.id == rule_id)
-                        {
-                            if index < rule.conditions.len() {
-                                rule.conditions.remove(index);
-                            }
-                        }
-                    });
+                .on_click(cx.listener(move |this, _: &gpui::ClickEvent, _window, cx| {
+                    if index < this.draft.conditions.len() {
+                        this.draft.conditions.remove(index);
+                    }
+                    this.inputs.clear();
                     this.picker = None;
-                    window.refresh();
+                    this.dirty = true;
                     cx.notify();
                 })),
         );
@@ -585,7 +594,6 @@ impl RuleEditor {
             for (key, label, _) in crate::autorule::VARIABLES {
                 let active = cond.var == *key;
                 let key_owned = key.to_string();
-                let rule_for_pick = rule.id.clone();
                 grid = grid.child(
                     div()
                         .id(SharedString::from(format!("rule-pick-{index}-{key}")))
@@ -606,20 +614,12 @@ impl RuleEditor {
                         .cursor_pointer()
                         .child(*label)
                         .on_click(cx.listener(
-                            move |this, _: &gpui::ClickEvent, window, cx| {
-                                let var = key_owned.clone();
-                                let rule_id = rule_for_pick.clone();
-                                settings::update(cx, |settings| {
-                                    if let Some(rule) =
-                                        settings.auto_rules.iter_mut().find(|r| r.id == rule_id)
-                                    {
-                                        if let Some(cond) = rule.conditions.get_mut(index) {
-                                            cond.var = var;
-                                        }
-                                    }
-                                });
+                            move |this, _: &gpui::ClickEvent, _window, cx| {
+                                if let Some(cond) = this.draft.conditions.get_mut(index) {
+                                    cond.var = key_owned.clone();
+                                }
                                 this.picker = None;
-                                window.refresh();
+                                this.dirty = true;
                                 cx.notify();
                             },
                         )),
@@ -628,183 +628,6 @@ impl RuleEditor {
             block = block.child(grid);
         }
         block.into_any_element()
-    }
-
-    /// 右边的一行菜单项：⠿ + 名称 + 动作（类型 + 值）+ 删除。
-    fn item_row(
-        &mut self,
-        rule: &settings::AutoRule,
-        index: usize,
-        item: &ItemSetting,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let dragging = self.drag == Some(index);
-        let drop_here = self.drop == Some(index) && self.drag.is_some();
-        let rule_id = rule.id.clone();
-
-        let mut row = div()
-            .id(SharedString::from(format!("rule-item-{index}")))
-            .w_full()
-            .min_w_0()
-            .px(px(6.))
-            .py(px(5.))
-            .flex()
-            .flex_col()
-            .gap(px(4.))
-            .rounded(px(theme::RADIUS_SMALL))
-            .border_1()
-            .border_color(if drop_here {
-                theme::accent()
-            } else {
-                theme::border()
-            })
-            .bg(theme::surface());
-        // 拖动：鼠标经过哪一行就记成落点
-        if self.drag.is_some() {
-            row = row.on_mouse_move(cx.listener(move |this, _: &MouseMoveEvent, _w, cx| {
-                if this.drop != Some(index) {
-                    this.drop = Some(index);
-                    cx.notify();
-                }
-            }));
-        }
-
-        let mut head = div().flex().items_center().gap(px(6.)).w_full().min_w_0();
-        let id_grip = rule_id.clone();
-        head = head.child(
-            div()
-                .id(SharedString::from(format!("rule-grip-{index}")))
-                .flex_none()
-                .px(px(2.))
-                .text_size(px(12.))
-                .text_color(if dragging {
-                    theme::accent()
-                } else {
-                    theme::ui_text_tertiary()
-                })
-                .cursor_pointer()
-                .child("⠿")
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |this, _: &MouseDownEvent, window, cx| {
-                        let _ = &id_grip;
-                        this.drag = Some(index);
-                        this.drop = Some(index);
-                        window.refresh();
-                        cx.notify();
-                    }),
-                ),
-        );
-
-        let label_input = self.field(
-            format!("item|{}|{}", rule.id, index),
-            item.label.clone(),
-            "菜单项名字",
-            cx,
-        );
-        head = head.child(div().flex_1().min_w_0().child(boxed(label_input)));
-
-        let id_del = rule_id.clone();
-        head = head.child(
-            div()
-                .id(SharedString::from(format!("rule-delitem-{index}")))
-                .flex_none()
-                .size(px(20.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(4.))
-                .cursor_pointer()
-                .text_size(px(10.))
-                .text_color(theme::ui_text_tertiary())
-                .hover(|style| style.bg(theme::surface_hover()))
-                .child("✕")
-                .on_click(cx.listener(move |this, _: &gpui::ClickEvent, window, cx| {
-                    let rule_id = id_del.clone();
-                    settings::update(cx, |settings| {
-                        if let Some(rule) =
-                            settings.auto_rules.iter_mut().find(|r| r.id == rule_id)
-                        {
-                            if index < rule.items.len() {
-                                rule.items.remove(index);
-                            }
-                        }
-                    });
-                    this.inputs.clear();
-                    window.refresh();
-                    cx.notify();
-                })),
-        );
-        row = row.child(head);
-
-        // 动作：类型 + 值（只编辑第一条动作，够用且不把界面撑爆）
-        let kind = item
-            .actions
-            .first()
-            .map(|step| step.kind)
-            .unwrap_or(ActionKind::Run);
-        let kind_value = match kind {
-            ActionKind::Run => 0u32,
-            ActionKind::Text => 1,
-            ActionKind::Keys => 2,
-            _ => 3,
-        };
-        let id_kind = rule_id.clone();
-        let mut action_row = div().flex().items_center().gap(px(4.)).w_full().min_w_0();
-        action_row = action_row.child(segmented(
-            "rule-kind",
-            &[
-                (0, crate::i18n::t("运行程序")),
-                (1, crate::i18n::t("发送文本")),
-                (2, crate::i18n::t("发送按键")),
-                (3, crate::i18n::t("内置动作")),
-            ],
-            kind_value,
-            cx.listener(move |this, picked: &u32, window, cx| {
-                let kind = match *picked {
-                    1 => ActionKind::Text,
-                    2 => ActionKind::Keys,
-                    3 => ActionKind::Builtin,
-                    _ => ActionKind::Run,
-                };
-                let rule_id = id_kind.clone();
-                settings::update(cx, |settings| {
-                    if let Some(rule) = settings.auto_rules.iter_mut().find(|r| r.id == rule_id) {
-                        if let Some(item) = rule.items.get_mut(index) {
-                            if item.actions.is_empty() {
-                                item.actions.push(ActionStep::new(kind, ""));
-                            } else if let Some(step) = item.actions.first_mut() {
-                                step.kind = kind;
-                            }
-                        }
-                    }
-                });
-                this.inputs.clear();
-                window.refresh();
-                cx.notify();
-            }),
-        ));
-
-        let action_value = item
-            .actions
-            .first()
-            .map(|step| step.value.clone())
-            .unwrap_or_default();
-        let hint = match kind {
-            ActionKind::Run => "程序名或完整路径，比如 notepad.exe",
-            ActionKind::Text => "要发送的文字，支持 {Enter} 之类",
-            ActionKind::Keys => "按键，比如 Ctrl+Shift+Esc",
-            _ => "内置动作的 id，比如 win.topmost",
-        };
-        let value_input = self.field(
-            format!("action|{}|{}", rule.id, index),
-            action_value,
-            hint,
-            cx,
-        );
-        action_row = action_row.child(div().flex_1().min_w_0().child(boxed(value_input)));
-        row = row.child(action_row);
-        row.into_any_element()
     }
 }
 
