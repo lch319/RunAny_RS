@@ -1239,7 +1239,7 @@ impl Render for KeyPadView {
                 element = element
                     .bg(theme::accent())
                     .border_color(theme::accent())
-                    .text_color(theme::surface_elevated());
+                    .text_color(theme::text_on_accent());
             } else if modifier {
                 element = element
                     .bg(theme::track())
@@ -1338,7 +1338,7 @@ impl Render for KeyPadView {
         if has_main {
             done = done
                 .bg(theme::accent())
-                .text_color(theme::surface_elevated())
+                .text_color(theme::text_on_accent())
                 .cursor_pointer()
                 .hover(|style| style.opacity(0.9))
                 .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {

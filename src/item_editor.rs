@@ -3970,7 +3970,7 @@ impl ItemEditor {
                     .when(selected, |style| {
                         style
                             .bg(theme::accent())
-                            .text_color(theme::surface_elevated())
+                            .text_color(theme::text_on_accent())
                     })
                     .when(!selected, |style| {
                         style

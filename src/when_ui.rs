@@ -464,7 +464,7 @@ impl WhenUi {
                             .when(self.picking, |chip| {
                                 chip.bg(theme::accent())
                                     .border_color(theme::accent())
-                                    .text_color(theme::surface_elevated())
+                                    .text_color(theme::text_on_accent())
                             })
                             .when(!self.picking, |chip| {
                                 chip.bg(theme::surface_elevated())

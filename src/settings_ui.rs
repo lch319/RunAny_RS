@@ -3547,7 +3547,7 @@ impl SettingsView {
                 .cursor_pointer()
                 .when(self.picking, |bar| {
                     bar.bg(theme::accent())
-                        .text_color(theme::surface_elevated())
+                        .text_color(theme::text_on_accent())
                 })
                 .when(!self.picking, |bar| {
                     bar.bg(theme::track())
@@ -9601,7 +9601,7 @@ pub(crate) fn segmented(
                 .when(selected, |style| {
                     style
                         .bg(theme::accent())
-                        .text_color(theme::surface_elevated())
+                        .text_color(theme::text_on_accent())
                 })
                 .when(!selected, |style| {
                     style.text_color(theme::ui_text_secondary())
@@ -9642,7 +9642,7 @@ pub(crate) fn primary_button_if(
     if enabled {
         button = button
             .bg(theme::accent())
-            .text_color(theme::surface_elevated())
+            .text_color(theme::text_on_accent())
             .cursor_pointer()
             .hover(|style| style.opacity(0.88))
             .on_click(on_click);

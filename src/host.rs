@@ -182,7 +182,7 @@ fn button(label: &'static str, primary: bool) -> gpui::Stateful<gpui::Div> {
         .hover(|style| style.opacity(0.88));
     if primary {
         base.bg(theme::accent())
-            .text_color(theme::surface_elevated())
+            .text_color(theme::text_on_accent())
             .child(label)
     } else {
         base.bg(theme::surface_sunken())
