@@ -46,6 +46,8 @@ mod theme;
 mod tip_template;
 mod tooltip;
 mod tray;
+#[cfg(windows)]
+mod window_border;
 mod tree_view;
 mod update;
 mod undo;

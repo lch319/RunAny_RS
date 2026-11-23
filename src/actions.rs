@@ -397,6 +397,18 @@ pub static BUILTINS: &[BuiltinDef] = &[
                 default: "#FF3B30",
                 hint: "写 #RRGGBB，比如 #FF3B30 红、#34C759 绿、#0A84FF 蓝",
             },
+            ParamDef {
+                key: "border_alpha",
+                label: "边框不透明度",
+                kind: ParamKind::Int {
+                    min: 20,
+                    max: 100,
+                    step: 5,
+                    unit: "%",
+                },
+                default: "100",
+                hint: "觉得边框太扎眼就调低",
+            },
         ],
     },
     BuiltinDef {
@@ -846,13 +858,18 @@ pub fn execute(id: &str, params: &BTreeMap<String, String>) -> Result<(), String
                 let hwnd = crate::win32::foreground_window();
                 let mode = values.text("mode", "toggle");
                 let topmost = crate::win32::set_topmost(hwnd, &mode)?;
+                // 边框用自绘的覆盖窗口画：Win10 / Win11 都能用
+                // （Win11 的 DWMWA_BORDER_COLOR 在 Win10 上直接失败）
                 if values.flag("border", false) && topmost {
-                    let thickness = values.int("border_width", 2).clamp(1, 12) as u32;
-                    let color = crate::win32::parse_hex_color(&values.text("border_color", "#FF3B30"));
-                    crate::win32::set_window_border(hwnd, color, thickness);
+                    let thickness = values.int("border_width", 3).clamp(1, 12) as u32;
+                    let color = crate::win32::parse_hex_color(&values.text("border_color", "#FF3B30"))
+                        .unwrap_or((255, 59, 48));
+                    let alpha = values.int("border_alpha", 100).clamp(20, 100) as u32;
+                    let alpha = (alpha * 255 / 100) as u8;
+                    crate::window_border::set(hwnd, color, thickness, alpha);
                 } else if !topmost {
                     // 取消置顶时把边框一起收掉，不然会留在窗口上
-                    crate::win32::set_window_border(hwnd, None, 0);
+                    crate::window_border::clear(hwnd);
                 }
                 Ok(())
             }
