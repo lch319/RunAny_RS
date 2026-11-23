@@ -1379,6 +1379,9 @@ pub struct MenuSettings {
     /// 规则列表
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub auto_rules: Vec<AutoRule>,
+    /// 新增规则时的自增号（只用来生成 id，不参与业务）
+    #[serde(default)]
+    pub next_auto_id: u32,
     /// 卡片圆角
     pub radius: f32,
     /// 菜单卡片外面那一圈 1px 描边（关掉就是纯色块，靠底色对比分边界）
@@ -2092,6 +2095,7 @@ impl MenuSettings {
             auto_enabled: true,
             auto_notice: true,
             auto_rules: Vec::new(),
+            next_auto_id: 1,
             radius: 8.0,
             menu_border: true,
             ahk_v1: String::new(),
@@ -2316,6 +2320,49 @@ impl MenuSettings {
         let mut out = Vec::new();
         collect_hotstrings(&self.items, &mut out);
         out
+    }
+
+    // ---- 自动规则：增删改序（界面里用） ----
+
+    pub fn add_auto_rule(&mut self) -> String {
+        let id = format!("auto-{}", self.next_auto_id);
+        self.next_auto_id += 1;
+        self.auto_rules.push(AutoRule {
+            id: id.clone(),
+            name: "新规则".to_string(),
+            interval_secs: 10,
+            rounds: 3,
+            ..AutoRule::default()
+        });
+        id
+    }
+
+    pub fn duplicate_auto_rule(&mut self, id: &str) -> Option<String> {
+        let index = self.auto_rules.iter().position(|rule| rule.id == id)?;
+        let mut copy = self.auto_rules[index].clone();
+        copy.id = format!("auto-{}", self.next_auto_id);
+        self.next_auto_id += 1;
+        copy.name = format!("{} 副本", copy.name);
+        self.auto_rules.insert(index + 1, copy.clone());
+        Some(copy.id)
+    }
+
+    pub fn remove_auto_rule(&mut self, id: &str) {
+        self.auto_rules.retain(|rule| rule.id != id);
+    }
+
+    pub fn auto_rule_mut(&mut self, id: &str) -> Option<&mut AutoRule> {
+        self.auto_rules.iter_mut().find(|rule| rule.id == id)
+    }
+
+    /// 把一条规则挪到第 `to` 个位置（拖动排序用）。
+    pub fn move_auto_rule(&mut self, id: &str, to: usize) {
+        let Some(from) = self.auto_rules.iter().position(|rule| rule.id == id) else {
+            return;
+        };
+        let rule = self.auto_rules.remove(from);
+        let to = to.min(self.auto_rules.len());
+        self.auto_rules.insert(to, rule);
     }
 
     /// 清掉一批菜单项上的某类信息（**不删项**）。

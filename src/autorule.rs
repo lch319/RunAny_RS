@@ -406,11 +406,35 @@ fn fire(cx: &mut gpui::App, target: &str, label: &str) {
     crate::popup::run_item_now(cx, &id);
 }
 
+/// 一行摘要，给规则卡片下面那行小字用。
+pub fn summarize(rule: &settings::AutoRule) -> String {
+    if rule.conditions.is_empty() {
+        return "还没有条件".to_string();
+    }
+    let joiner = if rule.any { " 或 " } else { " 且 " };
+    let parts: Vec<String> = rule
+        .conditions
+        .iter()
+        .map(|cond| {
+            let value = if cond.var == "running" {
+                format!("{} {}", cond.value, if cond.op == "ne" { "没在跑" } else { "在跑" })
+            } else {
+                format!("{} {}", op_label(&cond.op), cond.value)
+            };
+            format!("{} {}", variable_label(&cond.var), value)
+        })
+        .collect();
+    parts.join(joiner)
+}
+
 // ---------------------------------------------------------------------------
 // 文本格式（设置页里直接编辑的就是这段文本）
 // ---------------------------------------------------------------------------
 
 /// 规则列表 → 一段文本（每块之间用 `---` 隔开）。
+///
+/// 界面已经改成可视化卡片了，这两个函数留着做「导入 / 导出规则」用。
+#[allow(dead_code)]
 pub fn rules_to_text(rules: &[settings::AutoRule]) -> String {
     let mut out = String::new();
     for (index, rule) in rules.iter().enumerate() {
@@ -434,6 +458,7 @@ pub fn rules_to_text(rules: &[settings::AutoRule]) -> String {
 }
 
 /// 反过来：文本 → 规则列表。认不出的行直接跳过（宁可少一条，也别整段丢掉）。
+#[allow(dead_code)]
 pub fn text_to_rules(text: &str) -> Vec<settings::AutoRule> {
     let mut rules: Vec<settings::AutoRule> = Vec::new();
     let mut current = settings::AutoRule::default();
