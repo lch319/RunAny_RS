@@ -30,12 +30,15 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetWindowRect,
     IsIconic, IsWindow, IsWindowVisible, PeekMessageW, RegisterClassW, SetLayeredWindowAttributes,
     SetWindowLongPtrW, GWLP_HWNDPARENT,
-    SetWindowPos, ShowWindow, TranslateMessage, MSG, PM_REMOVE, SWP_NOACTIVATE, SWP_NOZORDER,
+    GetWindowLongW, SetWindowPos, ShowWindow, TranslateMessage, GWL_EXSTYLE, HWND_TOPMOST, HWND_TOP,
+    MSG, PM_REMOVE, SWP_NOACTIVATE,
     SW_HIDE, SW_SHOWNOACTIVATE, WM_ERASEBKGND, WNDCLASSW, WS_EX_LAYERED,
     WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 const CLASS_NAME: &str = "RunAnyBorderWnd";
+/// `WS_EX_TOPMOST`（windows-sys 里是 i32）
+const WS_EX_TOPMOST_BIT: i32 = 0x0000_0008;
 const LWA_ALPHA: u32 = 0x0000_0002;
 
 /// 窗口位置变化事件（`EVENT_OBJECT_LOCATIONCHANGE`）
@@ -328,16 +331,25 @@ fn run(rx: Receiver<Command>) {
                     ShowWindow(overlay.hwnd, SW_HIDE);
                     continue;
                 }
-                // 位置照常摆，z 序交给 owner 关系（建窗时 SetWindowLongPtrW）：
-                // 不再用 HWND_TOPMOST，否则边框会飘在所有窗口最上层（幽灵一样）。
+                // z 序必须**跟着目标走**：
+                //
+                // 置顶动作执行后目标本身就是 TOPMOST，覆盖窗口要是还留在普通层，
+                // 就被目标整个盖住 —— 用户看到的就是「外框完全看不见」。
+                // 所以目标置顶时覆盖窗口也置顶；目标普通时放到普通层最上面。
+                let style = GetWindowLongW(target as HWND, GWL_EXSTYLE);
+                let insert_after = if style & WS_EX_TOPMOST_BIT != 0 {
+                    HWND_TOPMOST
+                } else {
+                    HWND_TOP
+                };
                 SetWindowPos(
                     overlay.hwnd,
-                    std::ptr::null_mut(),
+                    insert_after,
                     rect.left,
                     rect.top,
                     width,
                     height,
-                    SWP_NOACTIVATE | SWP_NOZORDER,
+                    SWP_NOACTIVATE,
                 );
                 if overlay.shaped != (width, height) {
                     let thickness = overlay.thickness as i32;

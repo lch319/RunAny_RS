@@ -227,8 +227,10 @@ pub fn parse(text: &str) -> Imported {
                     out.stats.hotkeys += 1;
                 }
                 _ => {
-                    item.shortcut = raw_hotkey.to_string();
-                    item.note = format!("原快捷键 {raw_hotkey}");
+                    // 认不出来的键**不往「快捷键提示」里塞**：那一栏是给用户看
+                    // 「这一项绑了什么键」的，塞一个按不动的字符串会误导人。
+                    // 原样留在备注里，想用的人自己去设。
+                    item.note = format!("原快捷键 {raw_hotkey}（未识别，没绑定）");
                     out.stats.notes += 1;
                 }
             }
@@ -372,9 +374,13 @@ fn split_accel(label: &str) -> (String, String) {
 /// 「导入后菜单项全不见了」。所以这里只把关联写成一条短备注，不动 `contexts`，
 /// 菜单结构和原版主菜单保持一致；真想要筛选的人可以在编辑窗口里自己勾。
 fn apply_assoc(menu: &mut ItemSetting, name: &str, assoc: &str, stats: &mut Stats) {
-    let mut shown: Vec<String> = Vec::new();
-    let mut any_kind = false;
+    use crate::selection::SelectionKind;
+    use crate::settings::ContextMode;
+
     let bare_name = split_accel(name).0;
+    let mut kinds: Vec<SelectionKind> = Vec::new();
+    let mut extensions: Vec<String> = Vec::new();
+    let mut extra: Vec<String> = Vec::new();
 
     for token in assoc.split_whitespace() {
         // `-软件(&8)|软件(&8)`：原版里这是「关联就是自己」的占位写法，等于没关联
@@ -383,26 +389,73 @@ fn apply_assoc(menu: &mut ItemSetting, name: &str, assoc: &str, stats: &mut Stat
         }
         let lower = token.to_ascii_lowercase();
         match lower.as_str() {
-            "public" | "text" | "file" => any_kind = true,
-            // 按窗口过滤（`xxx.exe` / `#32770.class`）：本软件没有这个概念，
-            // 写了也只是噪音，直接不提
+            // `public` = 原版的「全部类型」：文字 / 文件 / 文件夹 / 图片 都算
+            "public" => kinds = SelectionKind::ALL.to_vec(),
+            "text" => {
+                if !kinds.contains(&SelectionKind::Text) {
+                    kinds.push(SelectionKind::Text);
+                }
+            }
+            // `file` 本身不是后缀，只是「后面这些是文件后缀」的分隔词
+            "file" => {
+                if !kinds.contains(&SelectionKind::File) {
+                    kinds.push(SelectionKind::File);
+                }
+            }
+            // 按窗口过滤（`xxx.exe` / `#32770.class`）：本软件没有这个概念
             _ if lower.ends_with(".class") || lower.ends_with(".exe") => {}
-            _ => shown.push(token.to_string()),
+            _ if is_extension(&lower) => extensions.push(lower),
+            _ => extra.push(token.to_string()),
         }
     }
 
-    let note = match (any_kind, shown.is_empty()) {
-        (true, true) => "原版关联：选中内容时显示".to_string(),
-        (true, false) => format!("原版关联：选中内容时显示 · {}", shown.join(" ")),
-        (false, false) => format!("原版关联：{}", shown.join(" ")),
-        (false, true) => return,
-    };
+    if !extensions.is_empty() {
+        if !kinds.contains(&SelectionKind::File) {
+            kinds.push(SelectionKind::File);
+        }
+        // 后缀表用竖线隔开，和界面上那次「清除适用选中内容」用同一套格式
+        menu.file_exts = extensions.join("|");
+    }
+    if !kinds.is_empty() {
+        // 原版是按选中内容切换的菜单：只有这里是真的「只在这些情况下出现」
+        menu.contexts = kinds.clone();
+        menu.context_mode = ContextMode::Own;
+    }
+
+    let mut parts: Vec<String> = Vec::new();
+    if !menu.file_exts.is_empty() {
+        parts.push(format!("仅 {} 文件", menu.file_exts));
+    }
+    if !kinds.is_empty() && menu.file_exts.is_empty() {
+        parts.push("按选中内容显示".to_string());
+    }
+    if !extra.is_empty() {
+        parts.push(format!("原版关联：{}", extra.join(" ")));
+    }
+    if parts.is_empty() {
+        return;
+    }
+    let note = parts.join(" · ");
     menu.note = if menu.note.is_empty() {
         note
     } else {
         format!("{}；{note}", menu.note)
     };
     stats.notes += 1;
+}
+
+/// 看起来像文件后缀的 token：纯字母数字、不含点、长度合理。
+///
+/// `xlsx` `ahk2` `txt` 都算；`(&3)`、`public`、`软件` 这些不算。
+fn is_extension(token: &str) -> bool {
+    if token.is_empty() || token.len() > 10 {
+        return false;
+    }
+    if !token.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+        return false;
+    }
+    // 纯数字是加速键残留（`(&3)` 里那个 3），不是后缀
+    token.chars().any(|ch| ch.is_ascii_alphabetic())
 }
 
 /// 原版插件调用导入后挂的备注（提醒功能还没接上）。
@@ -438,7 +491,12 @@ fn action_of(command: &str) -> ActionStep {
         return ActionStep::with_params(ActionKind::Builtin, PLUGIN_ACTION, params);
     }
     let (kind, value) = classify(command);
-    ActionStep::new(kind, value)
+    let mut step = ActionStep::new(kind, value);
+    if kind == ActionKind::Text {
+        // 原版：`文字;` 走「剪贴板粘贴」，`文字;;` 走「直接逐字发送」
+        step.text_paste = Some(!command.ends_with(";;"));
+    }
+    step
 }
 
 fn classify(command: &str) -> (ActionKind, String) {
@@ -703,6 +761,48 @@ mod tests {
     use crate::settings::ContextMode;
 
     #[test]
+    fn assoc_becomes_contexts_and_extensions() {
+        use crate::selection::SelectionKind;
+        let text = "-编辑(&3)|xlsx ppt doc xls ini txt ahk file xlsm ahk2\n\t项|a.exe\n\
+-划词(&10)|text\n\t项2|b.exe\n-文件(&G)|public\n\t项3|c.exe\n";
+        let imported = parse(text);
+        let menus: Vec<&ItemSetting> = imported.items.iter().collect();
+        assert_eq!(menus.len(), 3);
+
+        // 后缀用竖线隔开，`file` 这种分隔词要剔掉
+        assert_eq!(menus[0].file_exts, "xlsx|ppt|doc|xls|ini|txt|ahk|xlsm|ahk2");
+        assert!(menus[0].contexts.contains(&SelectionKind::File));
+
+        // `text` → 文字
+        assert_eq!(menus[1].contexts, vec![SelectionKind::Text]);
+
+        // `public` → 文字 / 文件 / 文件夹 / 图片 全选
+        assert_eq!(menus[2].contexts.len(), 4);
+    }
+
+    #[test]
+    fn phrase_semicolons_pick_paste_mode() {
+        let text = "账号1|lch319;\n账号2|lch319;;\n";
+        let imported = parse(text);
+        assert_eq!(imported.items.len(), 2);
+        // 一个分号 = 剪贴板粘贴开；两个分号 = 关
+        assert_eq!(imported.items[0].actions[0].text_paste, Some(true));
+        assert_eq!(imported.items[0].actions[0].value, "lch319");
+        assert_eq!(imported.items[1].actions[0].text_paste, Some(false));
+        assert_eq!(imported.items[1].actions[0].value, "lch319");
+    }
+
+    #[test]
+    fn unrecognized_hotkey_only_goes_to_note() {
+        let text = "测试\tCtrl+Alt+Q|notepad.exe\n";
+        let imported = parse(text);
+        assert_eq!(imported.items.len(), 1);
+        // 认不出来就不许塞进「快捷键提示」
+        assert!(imported.items[0].shortcut.is_empty());
+        assert!(imported.items[0].note.contains("Ctrl+Alt+Q"));
+    }
+
+    #[test]
     fn a_line_maps_to_a_menu_item_with_its_command() {
         let imported = parse("-常用(&1)\n\t我的电脑(&Z)|explorer.exe\n\t微信|WeChat.exe\n");
         assert_eq!(imported.items.len(), 1);
@@ -881,9 +981,8 @@ mod tests {
     /// 子菜单后面的 `|public file` 是「选中什么内容时显示这一支」，
     /// 不能当成名字的一部分。
     ///
-    /// 但它**不能**变成 `contexts`：本软件按选中内容筛选是替换式的，照搬会让
-    /// 菜单从十几支缩成一两支（导入的人看到的就是「菜单项全没了」）。
-    /// 这里只留一条短备注，菜单结构不动。
+    /// 现在就真的落到 `contexts` / `file_exts` 上了：用户要求
+    /// `|xlsx ppt file` 这种写成后缀表，`|public` 选全部四类。
     #[test]
     fn a_submenu_association_becomes_a_short_note() {
         let imported = parse(
@@ -892,18 +991,27 @@ mod tests {
         let file = &imported.items[0];
         assert_eq!(file.label, "文件", "关联不该留在名字里");
         assert_eq!(file.accel, "G");
-        assert_eq!(
-            file.context_mode,
-            ContextMode::Inherit,
-            "不要动筛选，否则菜单会缺项"
-        );
-        assert!(file.contexts.is_empty());
+        assert_eq!(file.context_mode, ContextMode::Own);
+        assert!(file.contexts.contains(&crate::selection::SelectionKind::File));
+        assert!(file.file_exts.is_empty(), "public 不是后缀");
         assert!(file.note.contains("选中内容"), "备注：{}", file.note);
+
+        // `-图片|png jpg`：后缀表用竖线隔开
+        let images = &imported.items[1];
+        assert_eq!(images.file_exts, "png|jpg");
+        assert!(images
+            .contexts
+            .contains(&crate::selection::SelectionKind::File));
+
+        // `-软件(&8)|软件(&8)`：关联就是自己，等于没关联
+        let software = &imported.items[2];
+        assert!(software.contexts.is_empty());
+        assert!(software.file_exts.is_empty());
 
         let pics = &imported.items[1];
         assert!(pics.note.contains("png"), "备注：{}", pics.note);
         assert!(!pics.note.contains("select"), "不该提窗口关联");
-        assert!(pics.contexts.is_empty());
+        assert!(pics.contexts.contains(&crate::selection::SelectionKind::File));
 
         // `|软件(&8)` 和名字一样：占位写法，等于没关联
         let software = &imported.items[2];
