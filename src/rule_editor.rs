@@ -101,6 +101,8 @@ pub struct RuleEditor {
     inputs: HashMap<String, Entity<crate::text_input::TextInput>>,
     subs: Vec<Subscription>,
     picker: Option<usize>,
+    /// 最近一次「测试条件」的结果：`(整体是否满足, 逐条明细)`
+    test: Option<(bool, Vec<(String, String, String, String, bool)>)>,
     tree: Entity<crate::tree_view::TreeView>,
     hwnd: Rc<Cell<Option<isize>>>,
 }
@@ -130,6 +132,7 @@ impl RuleEditor {
             inputs: HashMap::new(),
             subs: Vec::new(),
             picker: None,
+            test: None,
             tree,
             hwnd,
         }
@@ -154,6 +157,7 @@ impl RuleEditor {
         self.inputs.clear();
         self.subs.clear();
         self.picker = None;
+        self.test = None;
         let scope = crate::tree_view::Scope::Submenu(self.container_id.clone());
         self.tree = cx.new(|cx| crate::tree_view::TreeView::new_compact(scope, cx));
         cx.notify();
@@ -375,6 +379,87 @@ impl Render for RuleEditor {
         ));
         left = left.child(conditions);
 
+        // ---- 测试：不管满不满足都给结论
+        let mut test_row = div().flex().items_center().gap(px(8.)).w_full().min_w_0();
+        test_row = test_row.child(ghost_button_tagged(
+            "rule-test",
+            crate::i18n::t("测试条件"),
+            cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                let rows = crate::autorule::check(&this.draft);
+                let ok = if this.draft.conditions.is_empty() {
+                    false
+                } else if this.draft.any {
+                    rows.iter().any(|row| row.4)
+                } else {
+                    rows.iter().all(|row| row.4)
+                };
+                this.test = Some((ok, rows));
+                window.refresh();
+                cx.notify();
+            }),
+        ));
+        test_row = test_row.child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_size(px(9.5))
+                .text_color(theme::ui_text_tertiary())
+                .child(crate::i18n::t("按右边的变量现在实时的值判断一次")),
+        );
+        left = left.child(test_row);
+
+        if let Some((ok, rows)) = self.test.clone() {
+            let mut box_ = div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .p(px(6.))
+                .rounded(px(theme::RADIUS_SMALL))
+                .border_1()
+                .border_color(if ok { theme::accent() } else { theme::danger() })
+                .child(
+                    div()
+                        .text_size(px(10.5))
+                        .text_color(if ok { theme::accent() } else { theme::danger() })
+                        .child(if ok {
+                            crate::i18n::t("现在满足这条规则：命中后会执行右边的菜单项").to_string()
+                        } else {
+                            crate::i18n::t("现在不满足这条规则").to_string()
+                        }),
+                );
+            if rows.is_empty() {
+                box_ = box_.child(
+                    div()
+                        .text_size(px(9.5))
+                        .text_color(theme::ui_text_tertiary())
+                        .child(crate::i18n::t("一条条件都没有")),
+                );
+            }
+            for (var, op, value, actual, passed) in rows {
+                box_ = box_.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .text_size(px(9.5))
+                        .text_color(if passed {
+                            theme::ui_text_secondary()
+                        } else {
+                            theme::danger()
+                        })
+                        .child(format!(
+                            "{} {} {var} {} {value}（实际：{actual}）",
+                            if passed { "✓" } else { "✗" },
+                            "",
+                            op
+                        )),
+                );
+            }
+            left = left.child(box_);
+        }
+
         // ---- 右栏（和菜单项页同一棵树）
         let right = div()
             .flex_1()
@@ -584,25 +669,27 @@ impl RuleEditor {
                 })),
         );
 
+        // 只列这个变量讲得通的比较方式（「WiFi 名 大于 X」没意义）
+        let allowed = crate::autorule::ops_for(&cond.var);
         let mut options: Vec<(u32, &'static str)> = Vec::new();
-        for (position, (_, label)) in crate::autorule::OPS.iter().enumerate() {
-            options.push((position as u32, label));
+        for (position, key) in allowed.iter().enumerate() {
+            options.push((position as u32, crate::autorule::op_label(key)));
         }
-        let current = crate::autorule::OPS
+        let current = allowed
             .iter()
-            .position(|(key, _)| *key == cond.op)
-            .unwrap_or(0) as u32;
+            .position(|key| *key == cond.op)
+            .map(|position| position as u32)
+            .unwrap_or(999);
         row = row.child(segmented(
             "rule-op",
             &options,
             current,
             cx.listener(move |this, picked: &u32, _window, cx| {
-                let op = crate::autorule::OPS
-                    .get(*picked as usize)
-                    .map(|(key, _)| key.to_string())
-                    .unwrap_or_else(|| "eq".to_string());
+                let Some(key) = allowed.get(*picked as usize).map(|key| key.to_string()) else {
+                    return;
+                };
                 if let Some(cond) = this.draft.conditions.get_mut(index) {
-                    cond.op = op;
+                    cond.op = key;
                 }
                 this.dirty = true;
                 cx.notify();
@@ -683,6 +770,12 @@ impl RuleEditor {
                             move |this, _: &gpui::ClickEvent, _window, cx| {
                                 if let Some(cond) = this.draft.conditions.get_mut(index) {
                                     cond.var = key_owned.clone();
+                                    // 换了变量之后原来的比较方式可能讲不通了（比如
+                                    // 「大于」用在 WiFi 名上），退回「相等」
+                                    if !crate::autorule::ops_for(&key_owned).contains(&cond.op.as_str())
+                                    {
+                                        cond.op = "eq".to_string();
+                                    }
                                 }
                                 this.picker = None;
                                 this.dirty = true;

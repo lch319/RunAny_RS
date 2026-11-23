@@ -369,6 +369,60 @@ impl NoWindow for std::process::Command {
 
 use crate::settings;
 
+/// 这条规则有没有「真要执行」的东西：容器里有启用的菜单项，或老写法填了 target。
+pub fn has_work(rule: &settings::AutoRule) -> bool {
+    if !rule.target.trim().is_empty() {
+        return true;
+    }
+    settings::read(|settings| {
+        settings
+            .rule_items(&rule.id)
+            .iter()
+            .any(|item| item.enabled && !item.actions.is_empty())
+    })
+}
+
+/// 这条变量允许哪些比较方式。
+///
+/// 「WiFi 名 大于 X」这种组合没意义，列出来只会让人困惑。数值类只留大小与相等，
+/// 文本类只留相等 / 包含这一路。
+pub fn ops_for(var: &str) -> &'static [&'static str] {
+    match var {
+        "uptime" | "hour" | "minute" | "second" | "day" | "month" | "year" | "weekday" => {
+            &["eq", "ne", "gt", "lt"]
+        }
+        "online" | "is64" | "running" => &["eq", "ne"],
+        _ => &["eq", "ne", "contains", "not_contains"],
+    }
+}
+
+/// 逐条算出「现在满不满足」，给界面的「测试」按钮用。
+///
+/// 返回 `(变量名, 比较, 值, 实际值, 是否满足)`，顺序和规则里的条件一致。
+pub fn check(rule: &settings::AutoRule) -> Vec<(String, String, String, String, bool)> {
+    rule.conditions
+        .iter()
+        .map(|cond| {
+            let actual = if cond.var == "running" {
+                if probe("running", &cond.value) == "1" {
+                    "运行中".to_string()
+                } else {
+                    "没在运行".to_string()
+                }
+            } else {
+                probe(&cond.var, &cond.value)
+            };
+            (
+                variable_label(&cond.var).to_string(),
+                op_label(&cond.op).to_string(),
+                cond.value.clone(),
+                actual,
+                condition_holds(&cond.var, &cond.op, &cond.value),
+            )
+        })
+        .collect()
+}
+
 /// 一条规则的条件是否成立。
 pub fn evaluate(rule: &settings::AutoRule) -> bool {
     if rule.conditions.is_empty() {
@@ -395,7 +449,10 @@ pub fn start(cx: &mut gpui::App) {
         return;
     }
     for rule in rules.into_iter().filter(|rule| {
-        rule.enabled && !rule.target.trim().is_empty() && !rule.conditions.is_empty()
+        // 以前这里看的是 `target`（老写法指向主菜单某一项）。现在规则的菜单项
+        // 挂在自己的隐藏容器里，`target` 是空的 —— 照旧判断就等于**一条都不跑**
+        // （用户报的「填了时间条件、重启没执行」就是这个）。
+        rule.enabled && !rule.conditions.is_empty() && has_work(rule)
     }) {
         let rounds = rule.rounds.max(1);
         let interval = rule.interval_secs.max(1) as u64;
@@ -412,7 +469,8 @@ pub fn start(cx: &mut gpui::App) {
                         .await;
                 }
                 if evaluate(&rule) {
-                    let _ = cx.update(|app| fire(app, &rule.target, &label));
+                    let id = rule.id.clone();
+                    let _ = cx.update(move |app| fire(app, &id, &label));
                     break;
                 }
             }
