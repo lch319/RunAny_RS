@@ -134,6 +134,15 @@ pub fn lookup(name: &str, limit: usize) -> Vec<Hit> {
         format!("\"{name}.*\"")
     };
     let mut found = query(&pattern, limit.max(12));
+    // 带扩展名的整名查询在**有些机器上一条都查不出来**（实测 `QQ.exe` 返回 0 条，
+    // 而 `QQ` 能查到 `D://软件//安装版//QQNT//QQ.exe`）。原因在 Everything 那边
+    // 对「名字带点」的解析上，各家索引配置不一样，不去猜它——查不到就退回
+    // 「按主名找」，再把结果按**完整文件名**过滤一遍，精确性不变。
+    if found.is_empty() && has_ext {
+        if let Some(stem) = lower.split('.').next().filter(|stem| !stem.is_empty()) {
+            found = query(&format!("\"{stem}.*\""), limit.max(60));
+        }
+    }
     found.retain(|hit| {
         let file = file_name_of(&hit.path).to_ascii_lowercase();
         if has_ext {
@@ -158,7 +167,14 @@ pub fn search(keyword: &str, limit: usize) -> Vec<Hit> {
     if keyword.is_empty() {
         return Vec::new();
     }
-    query(keyword, limit)
+    let hits = query(keyword, limit);
+    if hits.is_empty() && keyword.contains('.') {
+        // 同 `lookup`：带扩展名的查询有的机器查不出来，退回按主名找
+        if let Some(stem) = keyword.split('.').next().filter(|stem| !stem.is_empty()) {
+            return query(&format!("\"{stem}.*\""), limit);
+        }
+    }
+    hits
 }
 
 /// 按「文件夹 + 后缀」列文件（子菜单的「自动生成」用）。
