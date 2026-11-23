@@ -1370,6 +1370,15 @@ pub struct MenuSettings {
     /// 太短：手一抖就收了；太长：子菜单盖着右边的项，点不到。默认 260。
     #[serde(default = "default_blank_rest_ms")]
     pub blank_rest_ms: u32,
+    /// 自动规则总开关
+    #[serde(default = "default_true")]
+    pub auto_enabled: bool,
+    /// 自动规则命中时弹一条提示（几秒后自己消失）
+    #[serde(default = "default_true")]
+    pub auto_notice: bool,
+    /// 规则列表
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_rules: Vec<AutoRule>,
     /// 卡片圆角
     pub radius: f32,
     /// 菜单卡片外面那一圈 1px 描边（关掉就是纯色块，靠底色对比分边界）
@@ -2080,6 +2089,9 @@ impl MenuSettings {
             panel_max_width: default_max_panel_width(),
             row_height: 24.0,
             blank_rest_ms: 260,
+            auto_enabled: true,
+            auto_notice: true,
+            auto_rules: Vec::new(),
             radius: 8.0,
             menu_border: true,
             ahk_v1: String::new(),
@@ -3263,6 +3275,64 @@ impl MenuSettings {
     pub fn reset_all(&mut self) {
         *self = Self::default();
     }
+}
+
+/// 自动规则里的一条条件：`变量 比较 值`
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct AutoCondition {
+    /// 变量键（见 `crate::autorule::VARIABLES`）
+    #[serde(default)]
+    pub var: String,
+    /// 比较方式键（见 `crate::autorule::OPS`）
+    #[serde(default)]
+    pub op: String,
+    #[serde(default)]
+    pub value: String,
+}
+
+/// 一组自动规则：启动后按间隔检测环境条件，命中就执行某个菜单项。
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct AutoRule {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    /// 这一条要不要参与检测
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// 条件的组合方式：`false` = 全部成立（且），`true` = 任一成立（或）
+    #[serde(default)]
+    pub any: bool,
+    /// 最多检测几轮（1 = 启动时查一次就收手）
+    #[serde(default = "default_one")]
+    pub rounds: u32,
+    /// 两轮之间隔多少秒
+    #[serde(default)]
+    pub interval_secs: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conditions: Vec<AutoCondition>,
+    /// 命中后执行哪个菜单项：填 id 或文案
+    #[serde(default)]
+    pub target: String,
+}
+
+impl Default for AutoRule {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            enabled: true,
+            any: false,
+            rounds: 1,
+            interval_secs: 10,
+            conditions: Vec::new(),
+            target: String::new(),
+        }
+    }
+}
+
+fn default_one() -> u32 {
+    1
 }
 
 /// 菜单项上「可以批量清掉」的那几类信息。

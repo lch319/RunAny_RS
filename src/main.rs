@@ -20,6 +20,7 @@ mod hotkey;
 mod hotstring;
 mod i18n;
 mod actions;
+mod autorule;
 mod icon;
 mod icon_cache;
 mod item_editor;
@@ -466,6 +467,9 @@ fn main() {
         hotstring::install(cx);
         // 提示小卡片（敲到第 N 个字符时在鼠标旁边冒出来）
         hint::install(cx);
+
+        // 自动规则：启动后按「轮次 × 间隔」检测环境条件，命中就执行菜单项
+        autorule::start(cx);
 
         // 启动那一波（设置解析、programs.json、图标、两个预热窗口）干完以后，
         // 把工作集还给系统：不开菜单的时候，这程序就是托盘里挂着的一个东西，

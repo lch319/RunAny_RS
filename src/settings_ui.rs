@@ -240,6 +240,7 @@ fn page_from_key(key: &str) -> Option<Page> {
         "hotstring" | "hotstrings" | "热字符串" => Some(Page::Hotstrings),
         "hotkeys" | "hotkey" | "热键" | "快捷键" => Some(Page::Hotkeys),
         "magic" | "一键直达" | "直达" | "正则直达" => Some(Page::Magic),
+        "auto" | "自动规则" | "自动" | "规则" => Some(Page::Auto),
         "config" | "配置" | "配置备份" | "备份" => Some(Page::Config),
         "about" | "关于" => Some(Page::About),
         _ => None,
@@ -258,13 +259,14 @@ enum Page {
     Hotstrings,
     Hotkeys,
     Magic,
+    Auto,
     Behavior,
     Config,
     About,
 }
 
 impl Page {
-    const ALL: [Page; 13] = [
+    const ALL: [Page; 14] = [
         Page::Appearance,
         Page::Items,
         Page::Actions,
@@ -275,6 +277,7 @@ impl Page {
         Page::Hotstrings,
         Page::Hotkeys,
         Page::Magic,
+        Page::Auto,
         Page::Behavior,
         Page::Config,
         Page::About,
@@ -301,6 +304,8 @@ impl Page {
             Page::Hotstrings => "热字符串",
             Page::Hotkeys => "热键",
             Page::Magic => "一键直达",
+            Page::Auto => "自动规则",
+            Page::Auto => "自动规则",
             Page::Behavior => "行为与占位符",
             Page::Config => "配置与备份",
             Page::About => "关于",
@@ -326,6 +331,7 @@ impl Page {
             Page::Hotstrings => "热字符串",
             Page::Hotkeys => "热键",
             Page::Magic => "一键直达",
+            Page::Auto => "自动规则",
             Page::Behavior => "行为",
             Page::Config => "配置",
             Page::About => "关于",
@@ -346,6 +352,7 @@ impl Page {
             Page::Programs => "「运行程序」只填文件名时自动补成完整路径；全盘查名字走 Everything",
             Page::FileNames => "菜单里用到的裸文件名，各自解析到哪、同名有几份",
             Page::Hotstrings => "敲一串字就执行菜单项（AHK 的热字符串）；短语本身在「菜单项」页给每一项配",
+            Page::Auto => "启动后按间隔检测环境条件（WiFi 名、开机时长、IP、时间……），命中就自动执行菜单项，不用按任何键",
             Page::Hotkeys => "弹出菜单的全局快捷键、不抓选中内容的那一颗；菜单项自己的触发键从这里找",
             Page::Magic => "选中内容 + 一个快捷键 → 按规则表从上往下问，第一条命中就直接跑它，不弹菜单",
             Page::Behavior => "弹出前抓取选中内容；动作参数里的内置变量",
@@ -595,6 +602,8 @@ pub struct SettingsView {
     tip_text: Entity<crate::text_area::TextArea>,
     /// 上面那个编辑框的订阅（要留住，掉了就不跟着改了）
     _tip_sub: Subscription,
+    /// 自动规则页：规则文本（懒创建，第一次进页面时按设置生成）
+    auto_area: Option<Entity<crate::text_area::TextArea>>,
     /// 动作库页：搜动作名的输入框
     action_query: Entity<TextInput>,
     /// 搜索框的订阅（不留住就不刷新了）
@@ -1021,6 +1030,7 @@ impl SettingsView {
             tip_text,
             _tip_sub: tip_sub,
             action_query,
+            auto_area: None,
             action_category: None,
             action_added: None,
             toast: None,
@@ -2374,6 +2384,7 @@ impl Render for SettingsView {
             Page::Programs => self.programs_page(&settings, cx),
             Page::FileNames => self.file_names_page(&settings, cx),
             Page::Hotstrings => self.hotstrings_page(&settings, cx),
+            Page::Auto => self.auto_page(&settings, cx),
             Page::Config => self.config_page(&settings, cx),
             Page::About => self.about_page(&settings, cx),
         };
@@ -7460,6 +7471,114 @@ impl SettingsView {
     /// 「哪串字绑哪一项」不在这儿列表 —— 热字符串和「点击」「快捷键」一样，
     /// 只是某一个菜单项的一个属性，在那一项的编辑窗口里配才不容易迷路；
     /// 想看"现在都配了哪些"，去「菜单项」页点那颗「有热字符串」筛选。
+    /// 自动规则页：一块 textarea 管所有规则（复制/粘贴一整段比点十几次下拉快）。
+    fn auto_page(&mut self, _settings: &MenuSettings, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let (enabled, notice) = settings::read(|settings| {
+            (settings.auto_enabled, settings.auto_notice)
+        });
+        if self.auto_area.is_none() {
+            let text = settings::read(|settings| {
+                crate::autorule::rules_to_text(&settings.auto_rules)
+            });
+            let area = cx.new(|cx| {
+                crate::text_area::TextArea::new(
+                    text,
+                    "名称: 连接公司网络\n执行: 连接公司WiFi\n轮次: 5\n间隔: 10\n条件:\nwifi eq Liang_5G",
+                    11.5,
+                    cx,
+                )
+                .with_min_rows(16)
+            });
+            let seen: std::rc::Rc<std::cell::Cell<Option<String>>> =
+                std::rc::Rc::new(std::cell::Cell::new(None));
+            cx.observe(&area, move |_view, area, cx| {
+                let text = area.read(cx).text();
+                if seen.replace(Some(text.clone())).as_deref() == Some(text.as_str()) {
+                    return;
+                }
+                let rules = crate::autorule::text_to_rules(&text);
+                settings::update(cx, |settings| settings.auto_rules = rules);
+            })
+            .detach();
+            self.auto_area = Some(area);
+        }
+
+        let mut rows: Vec<AnyElement> = Vec::new();
+        rows.push(toggle_row(
+            "启用自动规则",
+            "启动时按下面的规则检测；关掉之后一条都不跑",
+            enabled,
+            cx.listener(|_this, _: &ClickEvent, window, cx| {
+                settings::update(cx, |settings| {
+                    settings.auto_enabled = !settings.auto_enabled;
+                });
+                window.refresh();
+                cx.notify();
+            }),
+        ));
+        rows.push(toggle_row(
+            "执行时弹提示",
+            "命中并执行时在鼠标旁提示一下（否则屏幕上突然发生事情会让人怀疑）",
+            notice,
+            cx.listener(|_this, _: &ClickEvent, window, cx| {
+                settings::update(cx, |settings| {
+                    settings.auto_notice = !settings.auto_notice;
+                });
+                window.refresh();
+                cx.notify();
+            }),
+        ));
+
+        let mut body = div().flex().flex_col().gap(px(6.)).w_full().min_w_0();
+        body = body.child(
+            div()
+                .text_size(px(10.5))
+                .text_color(theme::ui_text_tertiary())
+                .child(crate::i18n::t(
+                    "写法：每条规则用 `---` 隔开；`名称:` `执行:`（菜单项文案或 id）`轮次:` `间隔:`（秒）`组合: 与/或`，条件一行一条 `变量 比较 值`。",
+                )),
+        );
+        body = body.child(
+            div()
+                .text_size(px(10.5))
+                .text_color(theme::ui_text_tertiary())
+                .child(format!(
+                    "{}：{}",
+                    crate::i18n::t("可用变量"),
+                    crate::autorule::VARIABLES
+                        .iter()
+                        .map(|(key, label, _)| format!("{key}={label}"))
+                        .collect::<Vec<_>>()
+                        .join("  ")
+                )),
+        );
+        body = body.child(
+            div()
+                .text_size(px(10.5))
+                .text_color(theme::ui_text_tertiary())
+                .child(format!(
+                    "{}：eq contains gt lt ne not_contains",
+                    crate::i18n::t("可用比较")
+                )),
+        );
+        if let Some(area) = self.auto_area.clone() {
+            body = body.child(
+                div()
+                    .w_full()
+                    .min_w_0()
+                    .h(px(300.))
+                    .rounded(px(6.))
+                    .border_1()
+                    .border_color(theme::border_strong())
+                    .bg(theme::surface_sunken())
+                    .child(area),
+            );
+        }
+
+        rows.push(section("规则", "一行一条条件；命中就执行指定的菜单项", vec![body.into_any_element()]));
+        rows
+    }
+
     fn hotstrings_page(
         &mut self,
         settings: &MenuSettings,

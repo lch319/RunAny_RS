@@ -3954,6 +3954,51 @@ fn monitor_areas() -> Vec<(i32, i32, i32, i32)> {
     }
 
     /// 光标底下是哪个窗口（拖动拾取「禁用应用」时用；松手那一刻问一次）。
+    /// 当前所有进程的 exe 文件名（小写不保证，调用方自己比）。
+    ///
+    /// 用 `EnumProcesses` + `QueryFullProcessImageNameW`：前者拿 PID 列表，
+    /// 后者取路径。打不开的进程（系统进程、更高权限的）直接跳过。
+    pub fn running_process_names() -> Vec<String> {
+        // psapi 的 EnumProcesses 这个 feature 也没开，自己声明
+        #[link(name = "psapi")]
+        extern "system" {
+            fn EnumProcesses(ids: *mut u32, size: u32, needed: *mut u32) -> i32;
+        }
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        let mut pids = vec![0u32; 2048];
+        let mut needed = 0u32;
+        unsafe {
+            if EnumProcesses(pids.as_mut_ptr(), (pids.len() * 4) as u32, &mut needed) == 0 {
+                return Vec::new();
+            }
+            pids.truncate((needed / 4) as usize);
+        }
+        let mut names = Vec::new();
+        for pid in pids {
+            if pid == 0 {
+                continue;
+            }
+            unsafe {
+                let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                if handle.is_null() {
+                    continue;
+                }
+                let mut buffer = vec![0u16; 1024];
+                let mut size = buffer.len() as u32;
+                if QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &mut size) != 0 {
+                    let path = String::from_utf16_lossy(&buffer[..size as usize]);
+                    if let Some(name) = path.rsplit(['\\', '/']).next() {
+                        names.push(name.to_string());
+                    }
+                }
+                let _ = windows_sys::Win32::Foundation::CloseHandle(handle);
+            }
+        }
+        names
+    }
+
     /// 按「标题包含 / 类名 / 进程名」找一扇可见窗口（找不到给 None）。
     pub fn find_window(kind: &str, needle: &str) -> Option<isize> {
         use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -4129,6 +4174,7 @@ pub use imp::{
     make_click_through, set_click_through,
     resize_window, fit_client_size, ime_composition_len, send_text_with_keys, paste_text,
     cursor_position_physical, screen_size_physical, set_topmost, set_window_border, cursor_in_window,
+    running_process_names,
     parse_hex_color, clipboard_snapshot, clipboard_restore,
     work_area_insets, window_rect, write_clipboard_text, zed_window_handles,
     trim_working_set,
