@@ -2658,6 +2658,16 @@ impl MenuSettings {
                 floating.len(),
                 roots.len()
             );
+            eprintln!(
+                "[prune] roots ids={:?} ext_owners={:?} ctx_exts={:?} ctx_kinds={:?}",
+                roots.iter().map(|i| i.id.clone()).collect::<Vec<_>>(),
+                roots
+                    .iter()
+                    .map(|i| (i.id.clone(), i.file_exts.clone()))
+                    .collect::<Vec<_>>(),
+                context.files,
+                context.kinds,
+            );
         }
         // 只在「同一支」上配了筛选时才摊：用户可能先在父级配、后来又在子级配，
         // 两个目标落在同一条祖先链上 —— 那就按**最深的那一个**摊，沿途的祖先壳
@@ -2668,7 +2678,34 @@ impl MenuSettings {
         // 曾经的错误做法：这里限制成「只能有一个目标」，结果父级也配了筛选时
         // 一级壳虽然被 `collapse_pure_shells` 化掉，二级却还剩成一个子菜单，
         // 用户看到的就是「摊是摊了，可还得再点一下，跟没摊一样」。
-        let flatten_to = if floating.is_empty() {
+        // ---- 后缀优先 ----
+        //
+        // 根层里**只有一个**子菜单写了具体后缀（比如只有一支写了 mp4）时，它优先：
+        // 直接摊开、连那支子菜单本身都不显示（用户选 mp4 文件就是要用它的动作）。
+        //
+        // 同时「只勾了文件、后缀留空」的那些子菜单**挪到开头但不摊开** ——
+        // 它们范围更宽，摆前面当兜底。写了后缀的那支已经是具体答案，不需要再点。
+        //
+        // 有两支以上写了后缀（哪怕写的是同一个 mp4）就不这么做：摊哪一支都是
+        // 擅自替用户做决定，按普通逻辑各自留成子菜单。
+        let ext_owners: Vec<String> = roots
+            .iter()
+            .filter(|item| {
+                item.kind == ItemKind::Submenu
+                    && !item.file_exts.trim().is_empty()
+                    && item.contexts.contains(&crate::selection::SelectionKind::File)
+            })
+            .map(|item| item.id.clone())
+            .collect();
+        let ext_flatten = if floating.is_empty() && ext_owners.len() == 1 {
+            Some(ext_owners[0].clone())
+        } else {
+            None
+        };
+
+        let flatten_to = if let Some(ext_target) = ext_flatten.clone() {
+            Some(ext_target)
+        } else if floating.is_empty() {
             pick_flatten_target(&targets, &self.items)
         } else {
             None
@@ -2683,6 +2720,23 @@ impl MenuSettings {
                 if is_usable_submenu(only) {
                     roots = only.children.clone();
                 }
+            }
+            // 「只勾了文件、后缀留空」的子菜单：摊平之后仍然保留，但挪到开头
+            if ext_flatten.is_some() {
+                let mut front: Vec<ItemSetting> = Vec::new();
+                let mut rest: Vec<ItemSetting> = Vec::new();
+                for item in roots {
+                    let is_broad_file_menu = item.kind == ItemKind::Submenu
+                        && item.file_exts.trim().is_empty()
+                        && item.contexts.contains(&crate::selection::SelectionKind::File);
+                    if is_broad_file_menu {
+                        front.push(item);
+                    } else {
+                        rest.push(item);
+                    }
+                }
+                front.extend(rest);
+                roots = front;
             }
         }
 
@@ -5441,6 +5495,72 @@ mod tests {
             out.push(item.id.clone());
             collect_ids(&item.children, out);
         }
+    }
+
+    /// 后缀优先：只有一个子菜单写了具体后缀时，那一支直接摊开（连壳都不显示），
+    /// 「只勾文件、后缀留空」的子菜单挪到开头但不摊开。
+    #[test]
+    fn unique_extension_submenu_wins_and_others_move_to_front() {
+        use crate::selection::SelectionKind;
+
+        let mut settings = MenuSettings::default();
+        settings.items.clear();
+
+        let mut narrow = ItemSetting::item("narrow", "影音");
+        narrow.kind = ItemKind::Submenu;
+        narrow.context_mode = ContextMode::Own;
+        narrow.contexts = vec![SelectionKind::File];
+        narrow.file_exts = "mp4".to_string();
+        let mut play = ItemSetting::item("play", "用 PotPlayer 播放");
+        play.actions = vec![crate::settings::ActionStep::new(ActionKind::Run, "p.exe")];
+        narrow.children = vec![play];
+
+        let mut broad = ItemSetting::item("broad", "文件操作");
+        broad.kind = ItemKind::Submenu;
+        broad.context_mode = ContextMode::Own;
+        broad.contexts = vec![SelectionKind::File];
+        let mut rename = ItemSetting::item("rename", "重命名");
+        rename.actions = vec![crate::settings::ActionStep::new(ActionKind::Text, "x")];
+        broad.children = vec![rename];
+
+        settings.items = vec![broad, narrow];
+
+        let context =
+            Context::new(vec![SelectionKind::File], vec!["影片.mp4".to_string()]);
+        let roots = settings.items_for(&context);
+        let ids: Vec<&str> = roots.iter().map(|item| item.id.as_str()).collect();
+
+        // 写后缀的那一支被摊开：根层直接是它的子项，没有「影音」这层壳
+        assert!(ids.contains(&"play"), "摊平后应直接看到子项：{ids:?}");
+        assert!(!ids.contains(&"narrow"), "写后缀的子菜单不该再占一层：{ids:?}");
+        // 空后缀的子菜单还在，而且排在前面
+        assert_eq!(ids.first(), Some(&"broad"), "宽范围的子菜单要排到开头：{ids:?}");
+    }
+
+    /// 两支写了同一个后缀：都不摊，按普通逻辑各自留成子菜单。
+    #[test]
+    fn same_extension_on_two_submenus_keeps_them_as_submenus() {
+        use crate::selection::SelectionKind;
+
+        let mut settings = MenuSettings::default();
+        settings.items.clear();
+        for (id, child) in [("a", "甲"), ("b", "乙")] {
+            let mut menu = ItemSetting::item(id, "影音");
+            menu.kind = ItemKind::Submenu;
+            menu.context_mode = ContextMode::Own;
+            menu.contexts = vec![SelectionKind::File];
+            menu.file_exts = "mp4".to_string();
+            let mut item = ItemSetting::item(child, "播放");
+            item.actions = vec![crate::settings::ActionStep::new(ActionKind::Run, "p.exe")];
+            menu.children = vec![item];
+            settings.items.push(menu);
+        }
+
+        let context =
+            Context::new(vec![SelectionKind::File], vec!["影片.mp4".to_string()]);
+        let roots = settings.items_for(&context);
+        let ids: Vec<&str> = roots.iter().map(|item| item.id.as_str()).collect();
+        assert!(ids.contains(&"a") && ids.contains(&"b"), "两支都该留着：{ids:?}");
     }
 
     /// 「删除」必须删界面上下拉框里显示的那份 —— 换配置只是预览，
