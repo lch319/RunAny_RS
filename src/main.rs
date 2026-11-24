@@ -12,6 +12,7 @@ mod autostart;
 mod backup;
 mod chrome;
 mod column;
+mod confirm;
 mod cursor;
 mod everything;
 mod hint;

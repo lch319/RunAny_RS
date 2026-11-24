@@ -1359,13 +1359,12 @@ impl gpui::Render for TreeView {
                     "删除",
                     count > 0,
                     cx.listener(|this, _: &ClickEvent, window, cx| {
-                        // 二次确认：批量删除一次能带走一整棵子树
-                        if !this.arm_danger("delete-selected") {
-                            window.refresh();
-                            cx.notify();
-                            return;
+                        // 批量删除同样走独立确认窗口
+                        let ids = this.selected_in_order();
+                        if !ids.is_empty() {
+                            crate::confirm::ask(crate::confirm::Ask::DeleteItems(ids), cx);
                         }
-                        this.delete_selected(cx);
+                        let _ = window;
                         window.refresh();
                     }),
                 ));
@@ -2316,17 +2315,14 @@ fn remove_button(path: Vec<usize>, cx: &mut Context<TreeView>) -> AnyElement {
         .hover(|style| style.bg(theme::surface_hover()).text_color(theme::danger()))
         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
             cx.stop_propagation();
-            // 二次确认：第一次点只是上膛
-            let confirm_key = format!("del-{:?}", path);
-            if !this.arm_danger(&confirm_key) {
-                window.refresh();
-                cx.notify();
-                return;
+            // 删除走独立确认窗口（它要带走整棵子树，不能一点就掉）
+            let id = settings::read(|settings| {
+                settings.node(&path).map(|item| item.id.clone())
+            });
+            if let Some(id) = id {
+                crate::confirm::ask(crate::confirm::Ask::DeleteItems(vec![id]), cx);
             }
-            settings::update(cx, |settings| settings.remove_at(&path));
-            this.prune(cx);
-            window.refresh();
-            cx.notify();
+            let _ = window;
         }))
         .child("✕")
         .into_any_element()

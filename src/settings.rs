@@ -3918,6 +3918,9 @@ fn dissolve_shells(
 /// 该摊哪一支：从 `targets` 里选最深的那个，前提是其余目标都在它的祖先链上
 /// （用户先在父级配了筛选、后来又给子级配 —— 同一支，按最深的摊）。
 /// 互不为祖先的两支各配各的 → 返回 None，谁都不摊（摊了会糊成一片）。
+/// `ext_flatten` 的标记值：写了后缀的那几支**全部**摊开。
+const EXT_FLATTEN_ALL: &str = "\u{0}ext-flatten-all";
+
 fn pick_flatten_target(targets: &[String], items: &[ItemSetting]) -> Option<String> {
     let mut best: Option<(usize, String)> = None;
     for target in targets {
@@ -5535,6 +5538,33 @@ mod tests {
         assert!(!ids.contains(&"narrow"), "写后缀的子菜单不该再占一层：{ids:?}");
         // 空后缀的子菜单还在，而且排在前面
         assert_eq!(ids.first(), Some(&"broad"), "宽范围的子菜单要排到开头：{ids:?}");
+    }
+
+    /// 一支 mp4、一支 mkv：后缀各不相同 → 两支都摊开（一次只可能选中一种文件）。
+    #[test]
+    fn different_extensions_are_both_flattened() {
+        use crate::selection::SelectionKind;
+
+        let mut settings = MenuSettings::default();
+        settings.items.clear();
+        for (id, ext, child) in [("mp4-menu", "mp4", "播放视频"), ("mkv-menu", "mkv", "播放视频")] {
+            let mut menu = ItemSetting::item(id, "影音");
+            menu.kind = ItemKind::Submenu;
+            menu.context_mode = ContextMode::Own;
+            menu.contexts = vec![SelectionKind::File];
+            menu.file_exts = ext.to_string();
+            let mut item = ItemSetting::item(format!("{id}-child"), child);
+            item.actions = vec![crate::settings::ActionStep::new(ActionKind::Run, "p.exe")];
+            menu.children = vec![item];
+            settings.items.push(menu);
+        }
+
+        // 仿真「选中了一个 mp4」：剪枝之后只剩 mp4 那一支，它要摊开
+        let context =
+            Context::new(vec![SelectionKind::File], vec!["影片.mp4".to_string()]);
+        let roots = settings.items_for(&context);
+        let ids: Vec<&str> = roots.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, vec!["mp4-menu-child"], "应当只剩摊开的子项：{ids:?}");
     }
 
     /// 两支写了同一个后缀：都不摊，按普通逻辑各自留成子菜单。

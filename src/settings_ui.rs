@@ -7594,11 +7594,7 @@ impl SettingsView {
                         )),
                 ),
         );
-        rows.push(section(
-            "规则",
-            "从上往下检测，命中一条就执行并跳过剩下的",
-            vec![body.into_any_element()],
-        ));
+        rows.push(section("规则", "", vec![body.into_any_element()]));
         rows
     }
 
