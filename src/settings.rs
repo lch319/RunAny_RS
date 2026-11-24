@@ -2389,8 +2389,6 @@ impl MenuSettings {
         self.auto_rules.push(AutoRule {
             id: id.clone(),
             name: "新规则".to_string(),
-            interval_secs: 10,
-            rounds: 3,
             ..AutoRule::default()
         });
         id
@@ -3411,10 +3409,10 @@ pub struct AutoRule {
     /// 条件的组合方式：`false` = 全部成立（且），`true` = 任一成立（或）
     #[serde(default)]
     pub any: bool,
-    /// 最多检测几轮（1 = 启动时查一次就收手）
-    #[serde(default = "default_one")]
+    /// 最多检测几轮。**0 = 没填**，表示「本软件运行起来只查一次」。
+    #[serde(default)]
     pub rounds: u32,
-    /// 两轮之间隔多少秒
+    /// 两轮之间隔多少秒（0 = 只查一次，不重复）
     #[serde(default)]
     pub interval_secs: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -3437,8 +3435,8 @@ impl Default for AutoRule {
             name: String::new(),
             enabled: true,
             any: false,
-            rounds: 1,
-            interval_secs: 10,
+            rounds: 0,
+            interval_secs: 0,
             conditions: Vec::new(),
             target: String::new(),
             items: Vec::new(),

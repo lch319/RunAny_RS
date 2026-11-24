@@ -7613,6 +7613,7 @@ impl SettingsView {
         let id = rule.id.clone();
         let id_grip = id.clone();
         let id_on = id.clone();
+        let id_toggle = id.clone();
         let id_edit = id.clone();
         let id_copy = id.clone();
         let id_del = id.clone();
@@ -7754,22 +7755,25 @@ impl SettingsView {
                 .flex_none()
                 .text_size(px(9.5))
                 .text_color(theme::ui_text_tertiary())
-                .child(format!(
-                    "{} 轮 × {}s",
-                    rule.rounds.max(1),
-                    rule.interval_secs
-                )),
+                .child(if rule.rounds == 0 || rule.interval_secs == 0 {
+                    "只在启动时检测一次".to_string()
+                } else {
+                    format!("{} 轮 × {}s", rule.rounds, rule.interval_secs)
+                }),
         );
-        head = head.child(ghost_button_tagged(
+        // 和「菜单项」页一样的图标按钮：✎ 编辑 / ⧉ 复制 / 👁 启用禁用 / ✕ 删除
+        head = head.child(icon_action(
             format!("auto-edit-{id}"),
+            "✎",
             crate::i18n::t("编辑"),
             cx.listener(move |_this, _: &ClickEvent, window, cx| {
                 crate::rule_editor::open(&id_edit, cx);
                 window.refresh();
             }),
         ));
-        head = head.child(ghost_button_tagged(
+        head = head.child(icon_action(
             format!("auto-copy-{id}"),
+            "⧉",
             crate::i18n::t("复制"),
             cx.listener(move |_this, _: &ClickEvent, window, cx| {
                 let key = id_copy.clone();
@@ -7781,8 +7785,28 @@ impl SettingsView {
                 cx.notify();
             }),
         ));
-        head = head.child(ghost_button_tagged(
+        head = head.child(icon_action(
+            format!("auto-toggle-{id}"),
+            if rule.enabled { "👁" } else { "🚫" },
+            if rule.enabled {
+                crate::i18n::t("禁用这条规则")
+            } else {
+                crate::i18n::t("启用这条规则")
+            },
+            cx.listener(move |_this, _: &ClickEvent, window, cx| {
+                let key = id_toggle.clone();
+                settings::update(cx, |settings| {
+                    if let Some(rule) = settings.auto_rule_mut(&key) {
+                        rule.enabled = !rule.enabled;
+                    }
+                });
+                window.refresh();
+                cx.notify();
+            }),
+        ));
+        head = head.child(icon_action(
             format!("auto-del-{id}"),
+            "✕",
             crate::i18n::t("删除"),
             cx.listener(move |_this, _: &ClickEvent, window, cx| {
                 let key = id_del.clone();
@@ -9567,6 +9591,33 @@ fn toggle_row(
                 ),
         )
         .child(switch(value))
+        .into_any_element()
+}
+
+/// 行尾的小图标按钮（✎ / ⧉ / 👁 / ✕）。
+///
+/// 和「菜单项」页的行内按钮一个味道：紧凑、悬停才亮。`ElementId` 带业务 id，
+/// 不然列表里几十颗会撞成同一个元素（点击只认第一颗）。
+fn icon_action(
+    id: String,
+    glyph: &'static str,
+    _tip: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    div()
+        .id(SharedString::from(format!("icon-{id}")))
+        .flex_none()
+        .size(px(22.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(4.))
+        .cursor_pointer()
+        .text_size(px(12.))
+        .text_color(theme::ui_text_secondary())
+        .hover(|style| style.bg(theme::surface_hover()))
+        .child(glyph)
+        .on_click(move |event, window, cx| on_click(event, window, cx))
         .into_any_element()
 }
 

@@ -218,6 +218,11 @@ pub struct TreeView {
     list_bounds: Rc<RefCell<Option<Bounds<Pixels>>>>,
     /// 拖进来的文件等着选「完整路径 / 只填文件名」
     pending_drop: Option<PendingDrop>,
+    /// 危险操作的两步确认：第一次点只是上膛，`CONFIRM_WINDOW` 内再点才真做。
+    ///
+    /// 用法和设置页的「恢复默认」一致：清掉快捷键这种一下就打出去、又没法撤销的
+    /// 操作，不该一点就生效。
+    armed_danger: Option<(String, std::time::Instant)>,
     /// 精简模式：只留搜索框和「添加菜单项」，别的按钮 / 筛选 / 批量栏都不画。
     ///
     /// 自动规则的编辑窗口里用它 —— 那一侧只要「往这条规则里加菜单项」，
@@ -289,6 +294,7 @@ impl TreeView {
             row_bounds: Rc::new(RefCell::new(HashMap::new())),
             list_bounds: Rc::new(RefCell::new(None)),
             pending_drop: None,
+            armed_danger: None,
             compact: false,
             note: None,
             _subs: subs,
@@ -680,6 +686,31 @@ impl TreeView {
             })
             .map(|row| row.id.clone())
             .collect()
+    }
+
+    /// 危险操作的两步确认：第一次点只是上膛，几秒内再点同一个才真做。
+    ///
+    /// `key` 要能区分「哪个按钮」——清除快捷键的四个按钮共用一个 key 会互相顶掉。
+    fn arm_danger(&mut self, key: &str) -> bool {
+        const WINDOW: std::time::Duration = std::time::Duration::from_secs(3);
+        let now = std::time::Instant::now();
+        let fire = self
+            .armed_danger
+            .as_ref()
+            .is_some_and(|(armed, at)| armed == key && now.duration_since(*at) < WINDOW);
+        self.armed_danger = if fire {
+            None
+        } else {
+            Some((key.to_string(), now))
+        };
+        fire
+    }
+
+    /// 这个按钮现在是不是「已上膛」（界面上把文案改成「再点一次」）。
+    fn danger_armed(&self, key: &str) -> bool {
+        self.armed_danger.as_ref().is_some_and(|(armed, at)| {
+            armed == key && at.elapsed() < std::time::Duration::from_secs(3)
+        })
     }
 
     /// 批量删除（子项跟着父项一起走，不会漏）。
@@ -1180,10 +1211,26 @@ impl gpui::Render for TreeView {
                             .bg(theme::border()),
                     )
                     // 批量清除：只抹掉这一类信息，菜单项和动作都留着
-                    .child(clear_button(settings::ClearField::Hotkey, cx))
-                    .child(clear_button(settings::ClearField::LocalHotkey, cx))
-                    .child(clear_button(settings::ClearField::Hotstring, cx))
-                    .child(clear_button(settings::ClearField::Contexts, cx))
+                    .child(clear_button(
+                        settings::ClearField::Hotkey,
+                        self.danger_armed("clear-快捷键"),
+                        cx,
+                    ))
+                    .child(clear_button(
+                        settings::ClearField::LocalHotkey,
+                        self.danger_armed("clear-局部快捷键"),
+                        cx,
+                    ))
+                    .child(clear_button(
+                        settings::ClearField::Hotstring,
+                        self.danger_armed("clear-热字符串"),
+                        cx,
+                    ))
+                    .child(clear_button(
+                        settings::ClearField::Contexts,
+                        self.danger_armed("clear-适用选中内容"),
+                        cx,
+                    ))
             })
             .when(self.scope_is_live(), |bar| {
                 bar.child(
@@ -1312,6 +1359,12 @@ impl gpui::Render for TreeView {
                     "删除",
                     count > 0,
                     cx.listener(|this, _: &ClickEvent, window, cx| {
+                        // 二次确认：批量删除一次能带走一整棵子树
+                        if !this.arm_danger("delete-selected") {
+                            window.refresh();
+                            cx.notify();
+                            return;
+                        }
                         this.delete_selected(cx);
                         window.refresh();
                     }),
@@ -1694,10 +1747,25 @@ enum AddKind {
 /// 「清除 ×××」按钮：清掉选中项（没选中就是全部）上的某一类信息。
 ///
 /// 只清那一个字段——菜单项还在，动作还留着，照样能点。
-fn clear_button(field: settings::ClearField, cx: &mut Context<TreeView>) -> AnyElement {
-    let label = format!("清除{}", field.label());
+fn clear_button(
+    field: settings::ClearField,
+    armed: bool,
+    cx: &mut Context<TreeView>,
+) -> AnyElement {
+    let label = if armed {
+        format!("再点一次清除{}", field.label())
+    } else {
+        format!("清除{}", field.label())
+    };
     let id = format!("tree-clear-{}", field.label());
+    let confirm_key = format!("clear-{}", field.label());
     let listener = cx.listener(move |this, _: &ClickEvent, window, cx| {
+        // 二次确认：先上膛，再点一次才真清
+        if !this.arm_danger(&confirm_key) {
+            window.refresh();
+            cx.notify();
+            return;
+        }
         let ids: Vec<String> = if this.selected.is_empty() {
             Vec::new()
         } else {
@@ -1729,7 +1797,11 @@ fn clear_button(field: settings::ClearField, cx: &mut Context<TreeView>) -> AnyE
         .border_color(theme::border_strong())
         .cursor_pointer()
         .text_size(px(10.5))
-        .text_color(theme::ui_text_secondary())
+        .text_color(if armed {
+            theme::danger()
+        } else {
+            theme::ui_text_secondary()
+        })
         .hover(|style| style.bg(theme::surface_hover()))
         .child(SharedString::from(label))
         .on_click(listener)
@@ -2244,6 +2316,13 @@ fn remove_button(path: Vec<usize>, cx: &mut Context<TreeView>) -> AnyElement {
         .hover(|style| style.bg(theme::surface_hover()).text_color(theme::danger()))
         .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
             cx.stop_propagation();
+            // 二次确认：第一次点只是上膛
+            let confirm_key = format!("del-{:?}", path);
+            if !this.arm_danger(&confirm_key) {
+                window.refresh();
+                cx.notify();
+                return;
+            }
             settings::update(cx, |settings| settings.remove_at(&path));
             this.prune(cx);
             window.refresh();

@@ -454,8 +454,9 @@ pub fn start(cx: &mut gpui::App) {
         // （用户报的「填了时间条件、重启没执行」就是这个）。
         rule.enabled && !rule.conditions.is_empty() && has_work(rule)
     }) {
-        let rounds = rule.rounds.max(1);
-        let interval = rule.interval_secs.max(1) as u64;
+        // 没填轮次 = 只查一次；没填间隔 = 不重复
+        let rounds = if rule.rounds == 0 { 1 } else { rule.rounds };
+        let interval = rule.interval_secs as u64;
         let label = if rule.name.trim().is_empty() {
             rule.target.clone()
         } else {
@@ -463,11 +464,13 @@ pub fn start(cx: &mut gpui::App) {
         };
         cx.spawn(async move |cx| {
             for round in 0..rounds {
-                if round > 0 {
+                if round > 0 && interval > 0 {
                     cx.background_executor()
                         .timer(std::time::Duration::from_secs(interval))
                         .await;
                 }
+                // 命中就做，**不打断别的规则**：每条规则各自独立判断，
+                // 命中一条不会让后面的规则被跳过（用户要的是「各自独立」）
                 if evaluate(&rule) {
                     let id = rule.id.clone();
                     let _ = cx.update(move |app| fire(app, &id, &label));

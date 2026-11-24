@@ -389,8 +389,15 @@ fn apply_assoc(menu: &mut ItemSetting, name: &str, assoc: &str, stats: &mut Stat
         }
         let lower = token.to_ascii_lowercase();
         match lower.as_str() {
-            // `public` = 原版的「全部类型」：文字 / 文件 / 文件夹 / 图片 都算
-            "public" => kinds = SelectionKind::ALL.to_vec(),
+            // `public` = 原版「这条跟选中内容有关」。用户要求**不含文字**：
+            // 只勾 文件 / 文件夹 / 图片（文字那类会跟划词菜单抢，太吵）
+            "public" => {
+                kinds = vec![
+                    SelectionKind::File,
+                    SelectionKind::Folder,
+                    SelectionKind::Image,
+                ]
+            }
             "text" => {
                 if !kinds.contains(&SelectionKind::Text) {
                     kinds.push(SelectionKind::Text);
@@ -776,8 +783,9 @@ mod tests {
         // `text` → 文字
         assert_eq!(menus[1].contexts, vec![SelectionKind::Text]);
 
-        // `public` → 文字 / 文件 / 文件夹 / 图片 全选
-        assert_eq!(menus[2].contexts.len(), 4);
+        // `public` → 文件 / 文件夹 / 图片（不含文字）
+        assert_eq!(menus[2].contexts.len(), 3);
+        assert!(!menus[2].contexts.contains(&SelectionKind::Text));
     }
 
     #[test]

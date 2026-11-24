@@ -368,33 +368,21 @@ impl ItemEditor {
             view.apply_field(move |item| item.shortcut = text, cx)
         }));
         subs.push(observe_field(&hotkey_input, cx, |view, text, cx| {
-            // 原样存（用户可能正打到一半）；注册那边认得出来的才真的注册，
-            // 界面上会把不合法的写法标出来
+            // 原样存（用户可能正打到一半）；注册那边认得出来的才真的注册
             let text = text.trim().to_string();
-            // 顺手把「快捷键提示」填上：设了触发键以后，右边那列该显示的就是这个组合。
-            // 只在提示还是空、或者正好等于上一次自动填的值时覆盖 —— 用户手改过就不动他。
-            let fill_hint = {
-                let (hint, prev_hotkey) = settings::read(|settings| {
-                    settings
-                        .find_path(&view.id)
-                        .and_then(|path| settings.node(&path))
-                        .map(|item| (item.shortcut.clone(), item.hotkey.clone()))
-                        .unwrap_or_default()
-                });
-                !text.is_empty() && (hint.trim().is_empty() || hint == prev_hotkey)
-            };
+            // **永远同步**到「快捷键提示」：填什么就显示什么，清空也跟着清空。
+            // 以前只在提示为空时才填，用户改过提示就再也不同步了，看着像没生效。
             let hint_text = text.clone();
-            let for_input = hint_text.clone();
-            view.apply_field(move |item| {
-                item.hotkey = text;
-                if fill_hint {
+            let for_input = text.clone();
+            view.apply_field(
+                move |item| {
+                    item.hotkey = text;
                     item.shortcut = hint_text;
-                }
-            }, cx);
-            if fill_hint {
-                view.shortcut
-                    .update(cx, |input, cx| input.set_text(for_input, cx));
-            }
+                },
+                cx,
+            );
+            view.shortcut
+                .update(cx, |input, cx| input.set_text(for_input, cx));
         }));
         subs.push(observe_field(&hotkey_local_input, cx, |view, text, cx| {
             let text = text.trim().to_string();

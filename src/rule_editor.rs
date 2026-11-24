@@ -214,8 +214,9 @@ impl RuleEditor {
         let index = parts.next().and_then(|value| value.parse::<usize>().ok());
         match field {
             "name" => self.draft.name = text,
-            "rounds" => self.draft.rounds = text.trim().parse().unwrap_or(1).max(1),
-            "interval" => self.draft.interval_secs = text.trim().parse().unwrap_or(10),
+            // 留空 = 0 = 只执行一次（不再硬塞默认的 1 / 10）
+            "rounds" => self.draft.rounds = text.trim().parse().unwrap_or(0),
+            "interval" => self.draft.interval_secs = text.trim().parse().unwrap_or(0),
             "cond" => {
                 if let Some(cond) = index.and_then(|i| self.draft.conditions.get_mut(i)) {
                     cond.value = text;
@@ -316,14 +317,22 @@ impl Render for RuleEditor {
         );
         let rounds_input = self.field(
             "rounds|".to_string(),
-            self.draft.rounds.max(1).to_string(),
-            "次数",
+            if self.draft.rounds == 0 {
+                String::new()
+            } else {
+                self.draft.rounds.to_string()
+            },
+            "留空 = 一次",
             cx,
         );
         let interval_input = self.field(
             "interval|".to_string(),
-            self.draft.interval_secs.to_string(),
-            "秒",
+            if self.draft.interval_secs == 0 {
+                String::new()
+            } else {
+                self.draft.interval_secs.to_string()
+            },
+            "留空 = 不重复",
             cx,
         );
 
