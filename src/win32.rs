@@ -4097,6 +4097,15 @@ fn monitor_areas() -> Vec<(i32, i32, i32, i32)> {
     ///
     /// 悬停提示要在「鼠标移出菜单」时自己收起来，而 GPUI 的 `on_hover(false)`
     /// 在鼠标直接离开窗口时并不可靠 —— 这里用系统给的「光标下是哪个窗口」兜底。
+    /// CapsLock 现在是不是**开启**状态（大写锁亮着）。
+    ///
+    /// `CapsLock` 是开关量，按不住，所以 `CapsLock+Q` 这种写法只能按「开关状态」判。
+    pub fn caps_lock_on() -> bool {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
+        const VK_CAPITAL: i32 = 0x14;
+        unsafe { GetKeyState(VK_CAPITAL) & 1 != 0 }
+    }
+
     /// 光标现在是不是落在这扇窗口（含其子窗口）里。
     pub fn cursor_in_window(hwnd: isize) -> bool {
         use windows_sys::Win32::UI::WindowsAndMessaging::{WindowFromPoint, GetAncestor, GA_ROOT};
@@ -4159,7 +4168,7 @@ pub use imp::{
     watch_foreground, window_process_id,
     process_name_of_window, input_context, preview_context, context_of_window,
     foreground_process_name, window_at_cursor, selection_target,
-    window_rect_exact, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
+    caps_lock_on, window_rect_exact, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
     process_path_of_window,
     sibling_processes, open_file_location,
     system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,

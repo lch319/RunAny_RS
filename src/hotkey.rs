@@ -120,7 +120,12 @@ enum MousePart {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Combo {
     mods: Mods,
+    /// 主键。带 `second` 时它是「要先按住的那颗」
     key: Key,
+    /// 要不要 CapsLock 处于**开启**状态（`CapsLock+Q` 这种写法）
+    caps: bool,
+    /// 双键组合的第二颗（`1+2`：按住 1 再按 2 才触发）
+    second: Option<Key>,
 }
 
 impl Combo {
@@ -129,8 +134,36 @@ impl Combo {
     /// `physical` 是 [`win32::modifier_state`] 那八个数；`sided == false` 时
     /// 带左右前缀的写法按「任意一边」算。
     fn fits(&self, key: Key, physical: &[bool; 8], sided: bool) -> bool {
-        if self.key != key {
+        self.fits_with(key, physical, sided, false, &|_| false)
+    }
+
+    /// 同上，额外带上 CapsLock 状态和「现在还按着哪些键」。
+    ///
+    /// 双键组合（`1+2`）判定的是**后按的那颗**：`held` 里要有第一颗。
+    fn fits_with(
+        &self,
+        key: Key,
+        physical: &[bool; 8],
+        sided: bool,
+        caps_on: bool,
+        held: &dyn Fn(Key) -> bool,
+    ) -> bool {
+        // CapsLock 写法要求它此刻是开着的（它是开关量，按不住）
+        if self.caps && !caps_on {
             return false;
+        }
+        match self.second {
+            // 双键：这次按下的必须是第二颗，且第一颗还按着
+            Some(second) => {
+                if second != key || !held(self.key) {
+                    return false;
+                }
+            }
+            None => {
+                if self.key != key {
+                    return false;
+                }
+            }
         }
         let family = |requirement: Option<Side>, left: bool, right: bool| -> bool {
             match requirement {
@@ -243,9 +276,17 @@ pub fn registered() -> usize {
 pub fn parse(text: &str) -> Option<Combo> {
     let mut mods = Mods::default();
     let mut key: Option<Key> = None;
+    let mut caps = false;
+    let mut second: Option<Key> = None;
     for part in text.trim().split('+') {
         let part = part.trim();
         if part.is_empty() {
+            continue;
+        }
+        // CapsLock 是开关量的「修饰键」：`CapsLock+Q`
+        let lower = part.to_ascii_lowercase();
+        if lower == "capslock" || lower == "caps" || part == "大写" {
+            caps = true;
             continue;
         }
         if let Some((slot, side)) = modifier_token(part) {
@@ -266,15 +307,21 @@ pub fn parse(text: &str) -> Option<Combo> {
         let parsed = mouse_token(part)
             .map(Key::Mouse)
             .or_else(|| win32::virtual_key(part).map(Key::Vk))?;
-        // 两个主键（`Ctrl+M+N`）不是一条组合键：那是「连按」，得放进「发送按键」
+        // 第二个主键 = 双键组合（`1+2`：按住 1 再按 2）
+        //
+        // 只允许**一颗**这样的键：`1+2+3` 这种三键组合手感太差，也容易误触
         if key.is_some() {
-            return None;
+            if second.is_some() {
+                return None;
+            }
+            second = Some(parsed);
+            continue;
         }
         key = Some(parsed);
     }
     let key = key?;
     // 只有修饰键没有主键（`Ctrl+Alt`）不算
-    Some(Combo { mods, key })
+    Some(Combo { mods, key, caps, second })
 }
 
 /// 这个写法能不能用（设置界面用来标红）。
@@ -293,7 +340,7 @@ pub fn reason(text: &str) -> Option<&'static str> {
     }
     let Some(combo) = parse(text) else {
         return Some(crate::i18n::either(
-            "写法不合法：一个修饰键 + 一个主键，例如 Ctrl+Alt+1、Ctrl+LButton、XButton2",
+            "写法不合法：修饰键 + 主键，或「按住一颗再按另一颗」，例如 Ctrl+Alt+1、CapsLock+Q、1+2",
             "Not a hotkey - modifiers plus one main key, e.g. Ctrl+Alt+1 or XButton2",
         ));
     };
@@ -667,8 +714,37 @@ fn lookup(id: u32) -> Option<Target> {
 ///
 /// 顺序：先按组合键筛，再问**生效条件** —— 条件不满足时**不吞键**，
 /// 那个组合在这个程序里还是它本来的意思（这就是 `#If` 的语义）。
+/// 此刻还按着的键（双键组合 `1+2` 靠它判断「1 是不是还按着」）
+static HELD: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<u16>>> =
+    std::sync::OnceLock::new();
+
+fn held_now() -> std::collections::HashSet<u16> {
+    HELD.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+        .lock()
+        .map(|set| set.clone())
+        .unwrap_or_default()
+}
+
 fn on_key(raw: RawKey) -> bool {
+    // 抬起也要记：双键组合要知道第一颗还有没有按着
     if !raw.down {
+        if let Ok(mut set) = HELD
+            .get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+            .lock()
+        {
+            set.remove(&raw.vk);
+        }
+        return false;
+    }
+    if let Ok(mut set) = HELD
+        .get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+        .lock()
+    {
+        set.insert(raw.vk);
+    }
+    // CapsLock 自己永远不触发（它只是开关键）
+    const VK_CAPITAL: u16 = 0x14;
+    if raw.vk == VK_CAPITAL {
         return false;
     }
     // 修饰键本身不触发（`Ctrl+Alt+M` 里的 Ctrl 不能算「按下了 M」）
@@ -688,8 +764,17 @@ fn on_key(raw: RawKey) -> bool {
             table.len()
         );
     }
+    let caps_on = win32::caps_lock_on();
+    let held = held_now();
     for binding in table.iter() {
-        if !binding.combo.fits(Key::Vk(raw.vk), &physical, binding.sided) {
+        let is_held = |key: Key| match key {
+            Key::Vk(vk) => held.contains(&vk),
+            Key::Mouse(_) => false,
+        };
+        if !binding
+            .combo
+            .fits_with(Key::Vk(raw.vk), &physical, binding.sided, caps_on, &is_held)
+        {
             continue;
         }
         // 只有条件里写了 `mouse.` 才去取鼠标下那扇窗口：钩子里每按一个键都要判，
@@ -1106,8 +1191,23 @@ mod tests {
     fn rejects_things_that_are_not_one_combo() {
         assert!(parse("").is_none());
         assert!(parse("Ctrl+Alt").is_none(), "只有修饰键不算");
-        assert!(parse("Ctrl+M+N").is_none(), "两个主键是连按，不是一条组合键");
+        assert!(parse("1+2+3").is_none(), "三颗主键不支持（最多两颗）");
+        assert!(parse("Ctrl+M+N").is_some(), "修饰键 + 两颗键也算双键组合");
+        assert!(parse("1+2").is_some(), "两颗主键 = 双键组合");
         assert!(parse("Ctrl+").is_none());
+    }
+
+    #[test]
+    fn caps_lock_and_chords_parse() {
+        let caps = parse("CapsLock+Q").expect("CapsLock 当修饰键");
+        assert!(caps.caps);
+        assert_eq!(caps.key, Key::Vk(0x51));
+        assert!(caps.second.is_none());
+
+        let chord = parse("1+2").expect("双键组合");
+        assert_eq!(chord.key, Key::Vk(0x31));
+        assert_eq!(chord.second, Some(Key::Vk(0x32)));
+        assert!(!chord.caps);
     }
 
     #[test]
@@ -1199,7 +1299,8 @@ mod tests {
     #[test]
     fn reason_names_the_problem() {
         assert!(reason("Ctrl+Alt").is_some(), "只有修饰键要说清楚");
-        assert!(reason("Ctrl+M+N").is_some(), "两个主键要说清楚");
+        assert!(reason("1+2+3").is_some(), "三颗主键要说清楚");
+        assert!(reason("1+2").is_none(), "双键组合是合法的");
         assert!(reason("Ctrl+Alt+M").is_none());
     }
 }

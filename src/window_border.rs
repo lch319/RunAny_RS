@@ -29,16 +29,12 @@ use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetWindowRect,
     IsIconic, IsWindow, IsWindowVisible, PeekMessageW, RegisterClassW, SetLayeredWindowAttributes,
-    SetWindowLongPtrW, GWLP_HWNDPARENT,
-    GetWindowLongW, SetWindowPos, ShowWindow, TranslateMessage, GWL_EXSTYLE, HWND_TOPMOST, HWND_TOP,
-    MSG, PM_REMOVE, SWP_NOACTIVATE,
+    SetWindowPos, ShowWindow, TranslateMessage, MSG, PM_REMOVE, SWP_NOACTIVATE, SWP_NOZORDER,
     SW_HIDE, SW_SHOWNOACTIVATE, WM_ERASEBKGND, WNDCLASSW, WS_EX_LAYERED,
     WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
 const CLASS_NAME: &str = "RunAnyBorderWnd";
-/// `WS_EX_TOPMOST`（windows-sys 里是 i32）
-const WS_EX_TOPMOST_BIT: i32 = 0x0000_0008;
 const LWA_ALPHA: u32 = 0x0000_0002;
 
 /// 窗口位置变化事件（`EVENT_OBJECT_LOCATIONCHANGE`）
@@ -246,7 +242,9 @@ fn run(rx: Receiver<Command>) {
                                     0,
                                     0,
                                     0,
-                                    std::ptr::null_mut(),
+                                    // 第 9 个参数 = owner：创建时就认目标窗口，
+                                    // Windows 会一直把它排在 owner 正上方
+                                    target as HWND,
                                     std::ptr::null_mut(),
                                     GetModuleHandleW(std::ptr::null()),
                                     std::ptr::null_mut(),
@@ -261,10 +259,6 @@ fn run(rx: Receiver<Command>) {
                             });
                             unsafe {
                                 SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
-                                // 认目标窗口当 owner：owned window 永远贴在它上面，
-                                // 但不会浮在**所有**窗口之上 —— 别的置顶窗口盖住目标时，
-                                // 边框跟着一起被盖住（这才是正常的视觉）
-                                SetWindowLongPtrW(hwnd, GWLP_HWNDPARENT, target);
                             }
                             if let Ok(mut targets) = tracked_targets().lock() {
                                 targets.insert(target);
@@ -331,25 +325,21 @@ fn run(rx: Receiver<Command>) {
                     ShowWindow(overlay.hwnd, SW_HIDE);
                     continue;
                 }
-                // z 序必须**跟着目标走**：
+                // 只摆位置，**绝对不动 z 序**：
                 //
-                // 置顶动作执行后目标本身就是 TOPMOST，覆盖窗口要是还留在普通层，
-                // 就被目标整个盖住 —— 用户看到的就是「外框完全看不见」。
-                // 所以目标置顶时覆盖窗口也置顶；目标普通时放到普通层最上面。
-                let style = GetWindowLongW(target as HWND, GWL_EXSTYLE);
-                let insert_after = if style & WS_EX_TOPMOST_BIT != 0 {
-                    HWND_TOPMOST
-                } else {
-                    HWND_TOP
-                };
+                // 之前为了让边框「盖在置顶窗口上面」用了 HWND_TOPMOST，结果
+                // ① 它把我们的弹出菜单也盖住了；② 置顶几个窗口时几块 topmost
+                // 板子互相抢位置，看着一直在闪。
+                // owner 关系（建窗时传的 parent）已经保证「紧贴目标上方、随目标
+                // 一起被别的窗口盖住」，这里再多此一举就是添乱。
                 SetWindowPos(
                     overlay.hwnd,
-                    insert_after,
+                    std::ptr::null_mut(),
                     rect.left,
                     rect.top,
                     width,
                     height,
-                    SWP_NOACTIVATE,
+                    SWP_NOACTIVATE | SWP_NOZORDER,
                 );
                 if overlay.shaped != (width, height) {
                     let thickness = overlay.thickness as i32;
