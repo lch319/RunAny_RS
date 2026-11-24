@@ -267,10 +267,11 @@ enum Page {
 
 impl Page {
     const ALL: [Page; 14] = [
-        Page::Appearance,
+        // 常规排最前：换机器、改开机启动这些是刚装完就要碰的
+        Page::General,
         Page::Items,
         Page::Actions,
-        Page::General,
+        Page::Appearance,
         Page::Tray,
         Page::Programs,
         Page::FileNames,
@@ -346,7 +347,7 @@ impl Page {
         match self {
             Page::Appearance => "配色、尺寸与显示项，改完立刻生效",
             Page::General => "开机自启、界面语言、让路的程序、最近运行",
-            Page::Items => "搜索筛选、按住一行就能拖动排序，Ctrl / Shift 点选多项，点 ✎ 改文案 / 动作 / 快捷键 / 热字符串",
+            Page::Items => "搜索筛选、按住一行就能拖动排序，Ctrl / Shift 点选多项；点行尾的编辑图标改文案 / 动作 / 快捷键 / 热字符串",
             Page::Actions => "内置动作的目录：搜一搜、看参数，点「添加到菜单」就能用；AHK 脚本也在这里配",
             Page::Tray => "托盘图标本身 + 它右键弹出的菜单（和菜单项同一套编辑方式）",
             Page::Programs => "「运行程序」只填文件名时自动补成完整路径；全盘查名字走 Everything",
@@ -6189,18 +6190,25 @@ impl SettingsView {
                 .id(SharedString::from(format!("magic-edit-{id}")))
                 .flex_none()
                 .h(px(20.))
-                .px(px(7.))
+                .size(px(20.))
                 .flex()
                 .items_center()
+                .justify_center()
                 .rounded(px(4.))
-                .text_size(px(9.5))
-                .text_color(theme::ui_text_secondary())
-                .bg(theme::surface_elevated())
-                .border_1()
-                .border_color(theme::border_strong())
+                .text_color(theme::ui_text_tertiary())
                 .cursor_pointer()
-                .hover(|style| style.bg(theme::surface_hover()))
-                .child(crate::i18n::t("改"))
+                .hover(|style| {
+                    style
+                        .bg(theme::surface_hover())
+                        .text_color(theme::text_primary())
+                })
+                .child(
+                    gpui::svg()
+                        .path("icons/edit.svg")
+                        .size(px(12.))
+                        .flex_none()
+                        .text_color(theme::ui_text_secondary()),
+                )
                 .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
                     this.edit_magic_rule(Some(&id), cx);
                     window.refresh();
@@ -7760,7 +7768,7 @@ impl SettingsView {
         // 和「菜单项」页一样的图标按钮：✎ 编辑 / ⧉ 复制 / 👁 启用禁用 / ✕ 删除
         head = head.child(icon_action(
             format!("auto-edit-{id}"),
-            "✎",
+            "icons/edit.svg",
             crate::i18n::t("编辑"),
             cx.listener(move |_this, _: &ClickEvent, window, cx| {
                 crate::rule_editor::open(&id_edit, cx);
@@ -7769,7 +7777,7 @@ impl SettingsView {
         ));
         head = head.child(icon_action(
             format!("auto-copy-{id}"),
-            "⧉",
+            "icons/copy.svg",
             crate::i18n::t("复制"),
             cx.listener(move |_this, _: &ClickEvent, window, cx| {
                 let key = id_copy.clone();
@@ -7783,7 +7791,11 @@ impl SettingsView {
         ));
         head = head.child(icon_action(
             format!("auto-toggle-{id}"),
-            if rule.enabled { "👁" } else { "🚫" },
+            if rule.enabled {
+                "icons/eye.svg"
+            } else {
+                "icons/eye-off.svg"
+            },
             if rule.enabled {
                 crate::i18n::t("禁用这条规则")
             } else {
@@ -7802,7 +7814,7 @@ impl SettingsView {
         ));
         head = head.child(icon_action(
             format!("auto-del-{id}"),
-            "✕",
+            "icons/trash.svg",
             crate::i18n::t("删除"),
             cx.listener(move |_this, _: &ClickEvent, window, cx| {
                 let key = id_del.clone();
@@ -9596,23 +9608,34 @@ fn toggle_row(
 /// 不然列表里几十颗会撞成同一个元素（点击只认第一颗）。
 fn icon_action(
     id: String,
-    glyph: &'static str,
+    icon: &'static str,
     _tip: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
+    // 排版/配色照抄菜单项页的行内按钮（20px 方块、10px、三级字色、悬停提亮）
     div()
         .id(SharedString::from(format!("icon-{id}")))
         .flex_none()
-        .size(px(22.))
+        .size(px(20.))
         .flex()
         .items_center()
         .justify_center()
         .rounded(px(4.))
+        .text_size(px(10.))
+        .text_color(theme::ui_text_tertiary())
         .cursor_pointer()
-        .text_size(px(12.))
-        .text_color(theme::ui_text_secondary())
-        .hover(|style| style.bg(theme::surface_hover()))
-        .child(glyph)
+        .hover(|style| {
+            style
+                .bg(theme::surface_hover())
+                .text_color(theme::text_primary())
+        })
+        .child(
+            gpui::svg()
+                .path(icon)
+                .size(px(12.))
+                .flex_none()
+                .text_color(theme::ui_text_secondary()),
+        )
         .on_click(move |event, window, cx| on_click(event, window, cx))
         .into_any_element()
 }

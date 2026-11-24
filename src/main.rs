@@ -69,6 +69,14 @@ use gpui::{
 /// 内嵌的线性图标（不依赖外部资源文件，换主题时跟着文字色走）。
 const EDIT_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 2.2l3.2 3.2-8 8-4.2 1 1-4.2 8-8z"/><path d="M9.2 3.6l3.2 3.2"/><path d="M2 14.3h12"/></svg>"##;
 
+/// 复制（两份叠起来的纸）。
+const COPY_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V3.5A1.5 1.5 0 0 0 9 2H3.5A1.5 1.5 0 0 0 2 3.5V9a1.5 1.5 0 0 0 1.5 1.5h2"/></svg>"##;
+/// 删除（垃圾桶）。
+const TRASH_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h11"/><path d="M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5"/><path d="M3.8 4.5l.7 8.2a1.2 1.2 0 0 0 1.2 1.1h4.6a1.2 1.2 0 0 0 1.2-1.1l.7-8.2"/><path d="M6.5 7v4.5M9.5 7v4.5"/></svg>"##;
+/// 启用 / 禁用（眼睛 / 划掉的眼睛）。
+const EYE_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>"##;
+const EYE_OFF_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 3.8A6.4 6.4 0 0 1 8 3.5c4 0 6.5 4.5 6.5 4.5a12 12 0 0 1-2.2 2.7"/><path d="M11 11.2A6.6 6.6 0 0 1 8 12.5C4 12.5 1.5 8 1.5 8a12 12 0 0 1 3-3.5"/><path d="M2 2l12 12"/></svg>"##;
+
 /// 菜单顶部 / 底部「还有更多」的箭头（线性 chevron，用 currentColor 跟着文字色走）。
 const ARROW_DOWN_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg>"##;
 const ARROW_UP_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5L6 4l3.5 3.5"/></svg>"##;
@@ -79,6 +87,10 @@ impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
         Ok(match path {
             "icons/edit.svg" => Some(Cow::Borrowed(EDIT_ICON.as_bytes())),
+            "icons/copy.svg" => Some(Cow::Borrowed(COPY_ICON.as_bytes())),
+            "icons/trash.svg" => Some(Cow::Borrowed(TRASH_ICON.as_bytes())),
+            "icons/eye.svg" => Some(Cow::Borrowed(EYE_ICON.as_bytes())),
+            "icons/eye-off.svg" => Some(Cow::Borrowed(EYE_OFF_ICON.as_bytes())),
             "icons/arrow-down.svg" => Some(Cow::Borrowed(ARROW_DOWN_ICON.as_bytes())),
             "icons/arrow-up.svg" => Some(Cow::Borrowed(ARROW_UP_ICON.as_bytes())),
             // 菜单项的图标可以是用户自己的 svg 文件：内置资源里没有就按路径读盘。

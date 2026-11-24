@@ -53,6 +53,19 @@ pub fn check(cx: &mut gpui::App, force: bool) {
             .spawn(async { fetch() })
             .await;
         let _ = cx.update(|cx| {
+            // 发现新版本：先弹一个确认框问要不要下载（只有用户主动点「检测更新」
+            // 时才问，后台静默检查不打扰）
+            if let State::Newer { version, url } = &result {
+                if force {
+                    crate::confirm::ask(
+                        crate::confirm::Ask::DownloadUpdate {
+                            version: version.clone(),
+                            url: url.clone(),
+                        },
+                        cx,
+                    );
+                }
+            }
             set(result);
             crate::settings_ui::repaint_trees(cx);
         });
@@ -62,15 +75,46 @@ pub fn check(cx: &mut gpui::App, force: bool) {
 
 /// 真的去网上问（在后台线程里跑）。
 fn fetch() -> State {
-    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
+    // 用 `releases/latest.atom` 而不是 `api.github.com`：
+    //
+    // API 是按 IP 限流的（未认证 60 次/小时），用代理时整条线路的 IP 是共用的，
+    // 别人问几次就把额度吃光了 —— 用户看到的「一直被限流」就是这么来的。
+    // atom 是 github.com 的普通页面，跟着网页走，没有那个额度。
+    let url = format!("https://github.com/{REPO}/releases/latest.atom");
     match crate::win32::http_get(&url, 8000) {
-        Ok((200, body)) => parse(&body),
+        Ok((200, body)) => parse_atom(&body),
         Ok((404, _)) => State::Failed(
             "拿不到发布信息：仓库还没公开，或者还没建过 Release".to_string(),
         ),
-        Ok((403, _)) => State::Failed("被 GitHub 限流了，过一会儿再试".to_string()),
         Ok((code, _)) => State::Failed(format!("GitHub 返回 HTTP {code}")),
         Err(err) => State::Failed(err),
+    }
+}
+
+/// 从 atom feed 里挑最新那条的 tag。
+///
+/// feed 里每条 release 都带一个 `.../releases/tag/v0.2.2` 的链接，取第一条就行
+/// （GitHub 的 atom 是按时间倒序的）。
+fn parse_atom(body: &str) -> State {
+    let Some(index) = body.find("/releases/tag/") else {
+        return State::Failed("更新信息的格式看不懂".to_string());
+    };
+    let rest = &body[index + "/releases/tag/".len()..];
+    let tag: String = rest
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '.' || *ch == '-' || *ch == '_')
+        .collect();
+    let latest = tag.trim_start_matches(['v', 'V']).to_string();
+    if latest.is_empty() {
+        return State::Failed("发布信息里没有版本号".to_string());
+    }
+    if is_newer(&latest, current()) {
+        State::Newer {
+            version: tag,
+            url: format!("https://github.com/{REPO}/releases/latest"),
+        }
+    } else {
+        State::UpToDate
     }
 }
 

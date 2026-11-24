@@ -22,21 +22,25 @@ const HEIGHT: f32 = 168.0;
 pub enum Ask {
     /// 删掉这些菜单项（连同子树）
     DeleteItems(Vec<String>),
+    /// 发现新版本：问要不要去下载
+    DownloadUpdate { version: String, url: String },
 }
 
 impl Ask {
+    /// 确认按钮上的字（删除说「删除」，下载说「下载」）。
+    fn ok_label(&self) -> &'static str {
+        match self {
+            Ask::DeleteItems(_) => crate::i18n::t("删除"),
+            Ask::DownloadUpdate { .. } => crate::i18n::t("下载"),
+        }
+    }
+
     fn message(&self) -> String {
         match self {
-            Ask::DeleteItems(ids) => {
-                if ids.len() == 1 {
-                    crate::i18n::t("删除这个菜单项？它下面的整支子菜单也会一起删掉，删了没法撤销。")
-                        .to_string()
-                } else {
-                    format!(
-                        "{} 个菜单项",
-                        ids.len()
-                    ) + &crate::i18n::t("会被删掉（连子菜单一起），删了没法撤销。")
-                }
+            // 就一句话：用户要的是个「确认删除吗」，不需要再解释后果
+            Ask::DeleteItems(_) => crate::i18n::t("确认删除吗？").to_string(),
+            Ask::DownloadUpdate { version, .. } => {
+                format!("发现新版本 {}，现在下载吗？", version)
             }
         }
     }
@@ -45,6 +49,14 @@ impl Ask {
 thread_local! {
     /// 待确认的操作（单线程，thread_local 就够）
     static PENDING: RefCell<Option<Ask>> = const { RefCell::new(None) };
+    /// 被冻住的那扇窗口（弹窗期间不许点，关掉再放开）
+    static FROZEN: std::cell::Cell<isize> = const { std::cell::Cell::new(0) };
+}
+
+/// 放开被冻住的窗口。
+fn thaw() {
+    let hwnd = FROZEN.with(|slot| slot.replace(0));
+    crate::win32::enable_window(hwnd, true);
 }
 
 struct ConfirmHandle(gpui::AnyWindowHandle);
@@ -66,6 +78,11 @@ pub fn ask(what: Ask, cx: &mut App) {
     }
 
     PENDING.with(|slot| *slot.borrow_mut() = Some(what));
+
+    // 冻住呼叫方（一般是设置页）：弹窗期间它不该还能点
+    let caller = crate::win32::foreground_window();
+    FROZEN.with(|slot| slot.set(caller));
+    crate::win32::enable_window(caller, false);
 
     let bounds = Bounds::centered(None, size(px(WIDTH), px(HEIGHT)), cx);
     let opened = cx.open_window(
@@ -101,8 +118,12 @@ impl Confirm {
 
 impl Render for Confirm {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let message = PENDING
-            .with(|slot| slot.borrow().as_ref().map(|ask| ask.message()))
+        let (message, ok_label) = PENDING
+            .with(|slot| {
+                slot.borrow()
+                    .as_ref()
+                    .map(|ask| (ask.message(), ask.ok_label()))
+            })
             .unwrap_or_default();
 
         div()
@@ -145,6 +166,7 @@ impl Render for Confirm {
                             .hover(|style| style.bg(theme::surface_hover()))
                             .child("✕")
                             .on_click(cx.listener(|_this, _: &gpui::ClickEvent, window, _cx| {
+                                thaw();
                                 window.remove_window();
                             })),
                     ),
@@ -174,13 +196,15 @@ impl Render for Confirm {
                         "confirm-cancel",
                         crate::i18n::t("取消"),
                         cx.listener(|_this, _: &gpui::ClickEvent, window, _cx| {
+                            thaw();
                             window.remove_window();
                         }),
                     ))
                     .child(primary_button(
-                        crate::i18n::t("确认删除"),
+                        ok_label,
                         cx.listener(|_this, _: &gpui::ClickEvent, window, cx| {
                             window.remove_window();
+                            thaw();
                             let pending = PENDING.with(|slot| slot.borrow_mut().take());
                             if let Some(ask) = pending {
                                 run(ask, cx);
@@ -195,6 +219,11 @@ impl Render for Confirm {
 /// 真正执行。
 fn run(ask: Ask, cx: &mut App) {
     match ask {
+        Ask::DownloadUpdate { url, .. } => {
+            // 交给浏览器下载：自己下载再替换运行中的 exe 要写一堆「改名-重启」的
+            // 逻辑，失败率高（杀软会拦），先让用户拿到文件最稳。
+            crate::win32::open_url(&url);
+        }
         Ask::DeleteItems(ids) => {
             crate::settings::update(cx, |settings| {
                 for id in &ids {

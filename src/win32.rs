@@ -3307,6 +3307,40 @@ fn monitor_areas() -> Vec<(i32, i32, i32, i32)> {
         pids
     }
 
+    /// 让一扇窗口「暂时不能点」（弹确认框时把设置页冻住）。
+    pub fn enable_window(hwnd: isize, enabled: bool) {
+        // EnableWindow 这个 feature 没开，自己声明（user32）
+        #[link(name = "user32")]
+        extern "system" {
+            fn EnableWindow(hwnd: *mut std::ffi::c_void, enable: i32) -> i32;
+        }
+        if hwnd == 0 {
+            return;
+        }
+        unsafe {
+            EnableWindow(hwnd as *mut std::ffi::c_void, if enabled { 1 } else { 0 });
+        }
+    }
+
+    /// 用默认浏览器打开一个网址（更新提示用）。
+    pub fn open_url(url: &str) {
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let wide = |text: &str| -> Vec<u16> {
+            text.encode_utf16().chain(std::iter::once(0)).collect()
+        };
+        unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                wide("open").as_ptr(),
+                wide(url).as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                SW_SHOWNORMAL,
+            );
+        }
+    }
+
     /// 用资源管理器打开某个文件所在的文件夹并选中它。
     pub fn open_file_location(path: &str) {
         use windows_sys::Win32::UI::Shell::ShellExecuteW;
@@ -4170,7 +4204,7 @@ pub use imp::{
     foreground_process_name, window_at_cursor, selection_target,
     caps_lock_on, window_rect_exact, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
     process_path_of_window,
-    sibling_processes, open_file_location,
+    sibling_processes, open_file_location, open_url, enable_window,
     system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,
     window_scale,
     install_input_hooks, set_key_gate, set_mouse_gate, numlock_on, press_numlock,
