@@ -75,35 +75,59 @@ pub fn check(cx: &mut gpui::App, force: bool) {
 
 /// 真的去网上问（在后台线程里跑）。
 fn fetch() -> State {
-    // 用 `releases/latest.atom` 而不是 `api.github.com`：
+    // 不要只押一个源：
     //
-    // API 是按 IP 限流的（未认证 60 次/小时），用代理时整条线路的 IP 是共用的，
-    // 别人问几次就把额度吃光了 —— 用户看到的「一直被限流」就是这么来的。
-    // atom 是 github.com 的普通页面，跟着网页走，没有那个额度。
-    let url = format!("https://github.com/{REPO}/releases/latest.atom");
+    // - `api.github.com` 按 IP 限流（未认证 60 次/小时），走代理时出口 IP 共用，
+    //   很容易被别人吃光 → 403；
+    // - `releases.atom` / `tags.atom` 是 github.com 的普通页面，不吃那个额度。
+    //
+    // 先试 atom，失败再退回 API。
+    for url in [
+        format!("https://github.com/{REPO}/releases.atom"),
+        format!("https://github.com/{REPO}/tags.atom"),
+    ] {
+        if let Ok((200, body)) = crate::win32::http_get(&url, 8000) {
+            let state = parse_atom(&body);
+            if !matches!(state, State::Failed(_)) {
+                return state;
+            }
+        }
+    }
+
+    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
     match crate::win32::http_get(&url, 8000) {
-        Ok((200, body)) => parse_atom(&body),
+        Ok((200, body)) => parse(&body),
         Ok((404, _)) => State::Failed(
             "拿不到发布信息：仓库还没公开，或者还没建过 Release".to_string(),
         ),
+        Ok((403, _)) => State::Failed("被 GitHub 限流了，过一会儿再试".to_string()),
         Ok((code, _)) => State::Failed(format!("GitHub 返回 HTTP {code}")),
         Err(err) => State::Failed(err),
     }
 }
 
-/// 从 atom feed 里挑最新那条的 tag。
-///
-/// feed 里每条 release 都带一个 `.../releases/tag/v0.2.2` 的链接，取第一条就行
-/// （GitHub 的 atom 是按时间倒序的）。
 fn parse_atom(body: &str) -> State {
-    let Some(index) = body.find("/releases/tag/") else {
+    // `releases.atom` 用 `/releases/tag/v0.2.2`，`tags.atom` 用 `/tags/v0.2.2`
+    // （有的页面直接把版本写在 <title> 里）。三种都认，取第一个像版本号的。
+    let mut tag = String::new();
+    for needle in ["/releases/tag/", "/tags/", "<title>"] {
+        let Some(index) = body.find(needle) else {
+            continue;
+        };
+        let rest = &body[index + needle.len()..];
+        let found: String = rest
+            .trim_start_matches(['v', 'V'])
+            .chars()
+            .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '.' || *ch == '-' || *ch == '_')
+            .collect();
+        if found.chars().any(|ch| ch.is_ascii_digit()) && found.contains('.') {
+            tag = found;
+            break;
+        }
+    }
+    if tag.is_empty() {
         return State::Failed("更新信息的格式看不懂".to_string());
-    };
-    let rest = &body[index + "/releases/tag/".len()..];
-    let tag: String = rest
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '.' || *ch == '-' || *ch == '_')
-        .collect();
+    }
     let latest = tag.trim_start_matches(['v', 'V']).to_string();
     if latest.is_empty() {
         return State::Failed("发布信息里没有版本号".to_string());
@@ -173,7 +197,7 @@ fn is_newer(latest: &str, current: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::is_newer;
+    use super::*;
 
     #[test]
     fn versions_compare_by_number_not_by_text() {
@@ -183,5 +207,28 @@ mod tests {
         assert!(!is_newer("0.2.0", "0.2.0"));
         assert!(!is_newer("0.1.9", "0.2.0"));
         assert!(!is_newer("V0.2.0", "0.2.0"));
+    }
+
+    #[test]
+    fn atom_feed_gives_the_latest_tag() {
+        let body = r#"<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>tag:github.com,2008:https://github.com/lch319/RunAny_RS/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/lch319/RunAny_RS/releases"/>
+  <entry>
+    <link type="text/html" rel="alternate" href="https://github.com/lch319/RunAny_RS/releases/tag/v0.2.2"/>
+    <title>v0.2.2</title>
+  </entry>
+  <entry>
+    <link type="text/html" rel="alternate" href="https://github.com/lch319/RunAny_RS/releases/tag/v0.2.1"/>
+  </entry>
+</feed>"#;
+        // 解析成功即可（版本比不比当前新取决于编译时的版本号，测试里不断言）
+        assert!(!matches!(parse_atom(body), State::Failed(_)));
+    }
+
+    #[test]
+    fn atom_feed_without_a_tag_fails() {
+        assert!(matches!(parse_atom("<feed></feed>"), State::Failed(_)));
     }
 }

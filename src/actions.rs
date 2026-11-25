@@ -1411,7 +1411,13 @@ pub fn execute(id: &str, params: &BTreeMap<String, String>) -> Result<(), String
                 let hwnd = target_window(&values)?;
                 let path = crate::win32::process_path_of_window(hwnd)
                     .ok_or("读不到这个窗口对应的程序路径")?;
-                crate::win32::open_file_location(&path);
+                crate::win32::open_folder(
+                    std::path::Path::new(&path)
+                        .parent()
+                        .map(|dir| dir.display().to_string())
+                        .unwrap_or(path)
+                        .as_str(),
+                );
                 Ok(())
             }
             #[cfg(not(windows))]
@@ -1510,7 +1516,16 @@ pub fn execute(id: &str, params: &BTreeMap<String, String>) -> Result<(), String
             if path.is_empty() {
                 return Err("没有选中任何文件".into());
             }
-            shell(&format!("explorer /select,\"{path}\""))
+            // 走统一入口：配了第三方文件管理器就用它（`/select` 语义在那边不存在，
+            // 就直接打开所在文件夹）
+            crate::win32::open_folder(
+                std::path::Path::new(&path)
+                    .parent()
+                    .map(|dir| dir.display().to_string())
+                    .unwrap_or(path.clone())
+                    .as_str(),
+            );
+            Ok(())
         }
         "file.copy-path" => {
             let path = expand(&values.text("path", ""));

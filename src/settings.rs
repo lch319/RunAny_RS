@@ -1381,6 +1381,13 @@ pub struct MenuSettings {
     /// 太短：手一抖就收了；太长：子菜单盖着右边的项，点不到。默认 260。
     #[serde(default = "default_blank_rest_ms")]
     pub blank_rest_ms: u32,
+    /// 打开文件夹用的命令。留空 = 用资源管理器。
+    ///
+    /// 支持占位符 `{path}` / `{folder}` / `{dir}`（都一样，换成那个文件夹路径），
+    /// 例如：`dopusrt.exe /acmd go OPENCONTAINER NEWTAB=findexisting path={path}`。
+    /// 「打开文件夹」「打开文件所在位置」这些动作和设置页里的按钮都走它。
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub folder_opener: String,
     /// 自动规则总开关
     #[serde(default = "default_true")]
     pub auto_enabled: bool,
@@ -2103,6 +2110,7 @@ impl MenuSettings {
             panel_max_width: default_max_panel_width(),
             row_height: 24.0,
             blank_rest_ms: 260,
+            folder_opener: String::new(),
             auto_enabled: true,
             auto_notice: true,
             auto_rules: Vec::new(),
@@ -2451,6 +2459,9 @@ impl MenuSettings {
                         ClearField::Hotkey => {
                             item.hotkey.clear();
                             item.hotkey_when.clear();
+                            // 「快捷键提示」是跟着触发键走的，键清了提示也得清，
+                            // 否则菜单里还挂着一个按不动的组合
+                            item.shortcut.clear();
                         }
                         ClearField::LocalHotkey => {
                             item.hotkey_local.clear();

@@ -1215,7 +1215,21 @@ fn execute_step(cx: &mut App, step: &ActionStep, append_selection: bool) -> Resu
                 return Ok(());
             }
             // 「运行程序 + 接上选中内容」：`code ` + `"D:\a b.txt"` 这样拼
-            let command = match append_selection.then(crate::selection::append_arg).flatten() {
+            // 有时候（尤其是**直接用快捷键**跑这一项时）根本没抓过选中内容：
+            // 菜单没弹出来过，`current()` 是空的 —— 命令后面就少一个文件路径，
+            // 看着像「没获取到选中文件」。这里补一次现场抓取再取参数。
+            let appended = if append_selection {
+                match crate::selection::append_arg() {
+                    Some(arg) => Some(arg),
+                    None => {
+                        crate::selection::capture();
+                        crate::selection::append_arg()
+                    }
+                }
+            } else {
+                None
+            };
+            let command = match appended {
                 Some(argument) => format!("{value} {argument}"),
                 None => value.to_string(),
             };

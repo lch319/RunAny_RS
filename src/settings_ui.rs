@@ -603,6 +603,8 @@ pub struct SettingsView {
     tip_text: Entity<crate::text_area::TextArea>,
     /// 上面那个编辑框的订阅（要留住，掉了就不跟着改了）
     _tip_sub: Subscription,
+    /// 常规页：「打开文件夹的程序」输入框（第三方文件管理器）
+    folder_opener_input: Entity<TextInput>,
     /// 自动规则页：拖动中的规则 id / 悬停到的落点下标
     auto_drag: Option<String>,
     auto_drop: Option<usize>,
@@ -610,6 +612,8 @@ pub struct SettingsView {
     action_query: Entity<TextInput>,
     /// 搜索框的订阅（不留住就不刷新了）
     _action_sub: Subscription,
+    /// 「打开文件夹的程序」输入框的订阅（存着才不会被丢掉）
+    _opener_sub: Subscription,
     /// 动作库页当前选中的分类（None = 全部）
     action_category: Option<crate::actions::Category>,
     /// 刚加进菜单的那条动作名（页面上给个反馈）
@@ -866,6 +870,18 @@ impl SettingsView {
             )
         });
         let action_sub = cx.observe(&action_query, |_this, _input, cx| cx.notify());
+        let folder_opener_input = cx.new(|cx| {
+            TextInput::new(
+                settings::read(|settings| settings.folder_opener.clone()),
+                "留空 = 资源管理器；例：dopusrt.exe /acmd go \"path={path}\"",
+                11.5,
+                cx,
+            )
+        });
+        let opener_sub = cx.observe(&folder_opener_input, |_this, input, cx| {
+            let text = input.read(cx).text();
+            settings::update(cx, |settings| settings.folder_opener = text);
+        });
 
         // 程序搜索页：查名字的输入框 + 排除规则的编辑框
         let prog_query = cx.new(|cx| {
@@ -1041,6 +1057,8 @@ impl SettingsView {
             preview_params,
             probe_task: false,
             _action_sub: action_sub,
+            folder_opener_input,
+            _opener_sub: opener_sub,
             prog_query,
             prog_exclude,
             prog_extensions,
@@ -4253,7 +4271,8 @@ impl SettingsView {
                 cx.listener(move |_this, _: &ClickEvent, _window, _cx| {
                     if let Some(dir) = open_dir.as_ref() {
                         let _ = std::fs::create_dir_all(dir);
-                        let _ = std::process::Command::new("explorer").arg(dir).spawn();
+                        // 统一入口：配了第三方文件管理器就用它
+                        crate::win32::open_folder(&dir.display().to_string());
                     }
                 }),
             ));
@@ -4873,6 +4892,27 @@ impl SettingsView {
     fn general_page(&self, settings: &MenuSettings, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let recent = &settings.recent;
         vec![
+            section(
+                "打开文件夹",
+                "留空就用资源管理器。填了就用它打开：占位符 {path} 会换成那个文件夹的路径",
+                vec![row_with_control(
+                    "用指定程序打开文件夹",
+                    "所有「打开文件夹 / 打开文件所在位置 / 建好并打开」都走这里。例：dopusrt.exe /acmd go \"path={path}\"",
+                    div()
+                        .w(px(360.))
+                        .flex_none()
+                        .h(px(22.))
+                        .px(px(6.))
+                        .flex()
+                        .items_center()
+                        .rounded(px(6.))
+                        .bg(theme::surface_sunken())
+                        .border_1()
+                        .border_color(theme::border_strong())
+                        .child(self.folder_opener_input.clone())
+                        .into_any_element(),
+                )],
+            ),
             section(
                 "启动",
                 "开机自启、启动权限、界面语言",

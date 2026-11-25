@@ -3341,6 +3341,35 @@ fn monitor_areas() -> Vec<(i32, i32, i32, i32)> {
         }
     }
 
+    /// 打开一个文件夹：配了第三方文件管理器就用它，否则交给资源管理器。
+    pub fn open_folder(path: &str) {
+        let template = crate::settings::read(|settings| settings.folder_opener.clone());
+        let template = template.trim().to_string();
+        if !template.is_empty() {
+            // 占位符换成路径。注意不要给它套引号：用户自己会在模板里写
+            let command = template
+                .replace("{path}", path)
+                .replace("{folder}", path)
+                .replace("{dir}", path);
+            let mut parts = command.split_whitespace();
+            if let Some(program) = parts.next() {
+                let args: Vec<&str> = parts.collect();
+                let mut cmd = std::process::Command::new(program);
+                cmd.args(&args);
+                #[cfg(windows)]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd.creation_flags(0x0800_0000);
+                }
+                // 起不来（路径写错 / 程序没装）就退回资源管理器，别什么都不发生
+                if cmd.spawn().is_ok() {
+                    return;
+                }
+            }
+        }
+        let _ = std::process::Command::new("explorer").arg(path).spawn();
+    }
+
     /// 用资源管理器打开某个文件所在的文件夹并选中它。
     pub fn open_file_location(path: &str) {
         use windows_sys::Win32::UI::Shell::ShellExecuteW;
@@ -4204,7 +4233,7 @@ pub use imp::{
     foreground_process_name, window_at_cursor, selection_target,
     caps_lock_on, window_rect_exact, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
     process_path_of_window,
-    sibling_processes, open_file_location, open_url, enable_window,
+    sibling_processes, open_file_location, open_folder, open_url, enable_window,
     system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,
     window_scale,
     install_input_hooks, set_key_gate, set_mouse_gate, numlock_on, press_numlock,
