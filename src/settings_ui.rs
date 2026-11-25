@@ -588,6 +588,9 @@ pub struct SettingsView {
     selection_keys: Entity<TextInput>,
     /// 「复制后最多等待」输入框（毫秒）
     selection_wait: Entity<TextInput>,
+    /// 「按程序覆盖等待时长」每一行的输入框（键是 `proc|0` / `ms|0`）
+    wait_inputs: std::collections::HashMap<String, Entity<TextInput>>,
+    wait_subs: Vec<Subscription>,
     /// 弹出菜单的全局快捷键
     popup_hotkey: Entity<TextInput>,
     /// 同一份菜单、但不抓选中内容的那一颗（留空 = 不注册）
@@ -1039,6 +1042,8 @@ impl SettingsView {
             font_scroll: ScrollHandle::new(),
             selection_keys,
             selection_wait,
+            wait_inputs: std::collections::HashMap::new(),
+            wait_subs: Vec::new(),
             popup_hotkey,
             popup_noselect,
             magic_hotkey,
@@ -1099,6 +1104,46 @@ impl SettingsView {
     ///
     /// 上膛期间按钮文案会变成「再点一次确认」，超过时间自动撤回 ——
     /// 「恢复默认」一点就把用户辛苦排的菜单清掉，这种按钮不该一下就打出去。
+    /// 按程序覆盖的那几行输入框（懒创建，键 `proc|下标` / `ms|下标`）。
+    fn wait_field(
+        &mut self,
+        key: String,
+        initial: String,
+        hint: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Entity<TextInput> {
+        if let Some(entity) = self.wait_inputs.get(&key) {
+            return entity.clone();
+        }
+        let entity = cx.new(|cx| TextInput::new(initial, hint, 11.5, cx));
+        let seen: std::rc::Rc<std::cell::Cell<Option<String>>> =
+            std::rc::Rc::new(std::cell::Cell::new(None));
+        let key_for_observer = key.clone();
+        let sub = cx.observe(&entity, move |_view, input, cx| {
+            let text = input.read(cx).text();
+            if seen.replace(Some(text.clone())).as_deref() == Some(text.as_str()) {
+                return;
+            }
+            let mut parts = key_for_observer.split('|');
+            let field = parts.next().unwrap_or_default().to_string();
+            let index = parts.next().and_then(|value| value.parse::<usize>().ok());
+            settings::update(cx, move |settings| {
+                let Some(rule) = index.and_then(|i| settings.selection_wait_rules.get_mut(i))
+                else {
+                    return;
+                };
+                match field.as_str() {
+                    "proc" => rule.process = text.trim().to_string(),
+                    "ms" => rule.wait_ms = text.trim().parse().unwrap_or(0),
+                    _ => {}
+                }
+            });
+        });
+        self.wait_subs.push(sub);
+        self.wait_inputs.insert(key, entity.clone());
+        entity
+    }
+
     fn confirmed(&mut self, which: ResetKind, cx: &mut Context<Self>) -> bool {
         let now = std::time::Instant::now();
         let armed = self.armed_at(which);
@@ -5128,7 +5173,7 @@ impl SettingsView {
         ]
     }
 
-    fn behavior_page(&self, settings: &MenuSettings, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn behavior_page(&mut self, settings: &MenuSettings, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let mut vars: Vec<AnyElement> = crate::placeholders::VARS
             .iter()
             .map(|(name, hint)| var_row(name, hint, cx))
@@ -5205,6 +5250,121 @@ impl SettingsView {
                             )
                             .into_any_element(),
                     ),
+                    {
+                        // 按程序覆盖等待时长：慢程序单独放宽，别的还是秒弹
+                        let rules = settings.selection_wait_rules.clone();
+                        let mut rows: Vec<AnyElement> = Vec::new();
+                        rows.push(
+                            div()
+                                .text_size(px(10.))
+                                .text_color(theme::ui_text_tertiary())
+                                .child(crate::i18n::t(
+                                    "按程序覆盖：慢程序（Office、QQ 之类）单独放宽，没列出的走上面的全局值",
+                                ))
+                                .into_any_element(),
+                        );
+                        for (index, rule) in rules.iter().enumerate() {
+                            let proc_input = self.wait_field(
+                                format!("proc|{index}"),
+                                rule.process.clone(),
+                                "qq.exe",
+                                cx,
+                            );
+                            let ms_input = self.wait_field(
+                                format!("ms|{index}"),
+                                if rule.wait_ms == 0 {
+                                    String::new()
+                                } else {
+                                    rule.wait_ms.to_string()
+                                },
+                                "500",
+                                cx,
+                            );
+                            let mut row = div()
+                                .id(SharedString::from(format!("wait-rule-{index}")))
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
+                                .child(
+                                    div()
+                                        .w(px(160.))
+                                        .h(px(24.))
+                                        .px(px(6.))
+                                        .flex()
+                                        .items_center()
+                                        .rounded(px(6.))
+                                        .bg(theme::surface_sunken())
+                                        .border_1()
+                                        .border_color(theme::border_strong())
+                                        .child(proc_input),
+                                )
+                                .child(
+                                    div()
+                                        .w(px(64.))
+                                        .h(px(24.))
+                                        .px(px(6.))
+                                        .flex()
+                                        .items_center()
+                                        .rounded(px(6.))
+                                        .bg(theme::surface_sunken())
+                                        .border_1()
+                                        .border_color(theme::border_strong())
+                                        .child(ms_input),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(theme::ui_text_tertiary())
+                                        .child(crate::i18n::t("毫秒")),
+                                );
+                            row = row.child(ghost_button_tagged(
+                                format!("wait-del-{index}"),
+                                crate::i18n::t("删除"),
+                                cx.listener(move |this, _: &ClickEvent, window, cx| {
+                                    settings::update(cx, |settings| {
+                                        if index < settings.selection_wait_rules.len() {
+                                            settings.selection_wait_rules.remove(index);
+                                        }
+                                    });
+                                    this.wait_inputs.clear();
+                                    window.refresh();
+                                    cx.notify();
+                                }),
+                            ));
+                            rows.push(row.into_any_element());
+                        }
+                        rows.push(
+                            div()
+                                .child(ghost_button_tagged(
+                                    "wait-add",
+                                    crate::i18n::t("添加程序"),
+                                    cx.listener(|this, _: &ClickEvent, window, cx| {
+                                        settings::update(cx, |settings| {
+                                            settings.selection_wait_rules.push(
+                                                settings::SelectionWaitRule {
+                                                    process: String::new(),
+                                                    wait_ms: 500,
+                                                },
+                                            );
+                                        });
+                                        this.wait_inputs.clear();
+                                        window.refresh();
+                                        cx.notify();
+                                    }),
+                                ))
+                                .into_any_element(),
+                        );
+                        row_with_control(
+                            "按程序设置等待时长",
+                            "填进程名（qq.exe / qq 都认）+ 毫秒；留空的毫秒按全局值算",
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(4.))
+                                .child(div().flex().flex_col().gap(px(4.)).children(rows))
+                                .into_any_element(),
+                        )
+                    },
                     toggle_row(
                         "运行程序时接上选中内容（默认）",
                         "所有「运行程序」动作的默认值：命令末尾补一个空格再拼上选中内容；菜单项里可以单独设成开启 / 关闭，优先级高于这里",

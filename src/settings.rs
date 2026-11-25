@@ -1381,6 +1381,9 @@ pub struct MenuSettings {
     /// 太短：手一抖就收了；太长：子菜单盖着右边的项，点不到。默认 260。
     #[serde(default = "default_blank_rest_ms")]
     pub blank_rest_ms: u32,
+    /// 按程序覆盖「复制后最多等待」。没匹配上的走 `selection_wait_ms`。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub selection_wait_rules: Vec<SelectionWaitRule>,
     /// 打开文件夹用的命令。留空 = 用资源管理器。
     ///
     /// 支持占位符 `{path}` / `{folder}` / `{dir}`（都一样，换成那个文件夹路径），
@@ -2110,6 +2113,7 @@ impl MenuSettings {
             panel_max_width: default_max_panel_width(),
             row_height: 24.0,
             blank_rest_ms: 260,
+            selection_wait_rules: Vec::new(),
             folder_opener: String::new(),
             auto_enabled: true,
             auto_notice: true,
@@ -2616,6 +2620,34 @@ impl MenuSettings {
             matches!(a, MenuEntry::ColumnBreak) && matches!(b, MenuEntry::ColumnBreak)
         });
         entries
+    }
+
+    /// 这个程序该等多久（毫秒）。
+    ///
+    /// 匹配规则：进程名去掉 `.exe` 后不分大小写相等；没匹配上就用全局值。
+    /// 为什么允许按程序覆盖：慢程序（Office、QQ 这种）写剪贴板要几百毫秒，
+    /// 但全局按它们调大，**没有选中内容时**每次呼出都要白白等满 —— 这是用户
+    /// 反馈的「菜单不再秒弹」。
+    pub fn selection_wait_for(&self, process: &str) -> u64 {
+        let wanted = process
+            .trim()
+            .trim_end_matches(".exe")
+            .trim_end_matches(".EXE")
+            .to_lowercase();
+        if !wanted.is_empty() {
+            for rule in &self.selection_wait_rules {
+                let rule_process = rule
+                    .process
+                    .trim()
+                    .trim_end_matches(".exe")
+                    .trim_end_matches(".EXE")
+                    .to_lowercase();
+                if !rule_process.is_empty() && rule_process == wanted && rule.wait_ms > 0 {
+                    return rule.wait_ms.clamp(30, 8000);
+                }
+            }
+        }
+        self.selection_wait_ms.clamp(30, 8000)
     }
 
     /// 按选中内容的类型筛一遍根层，并决定要不要摊平。
@@ -3470,6 +3502,17 @@ impl MenuSettings {
     pub fn reset_all(&mut self) {
         *self = Self::default();
     }
+}
+
+/// 「复制后最多等待」的按程序覆盖：某个程序单独给一个等待时长。
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct SelectionWaitRule {
+    /// 进程名，`qq.exe` 和 `qq` 都认（比较时统一去后缀）
+    #[serde(default)]
+    pub process: String,
+    /// 这个程序最多等多少毫秒（0 = 跟随全局）
+    #[serde(default)]
+    pub wait_ms: u64,
 }
 
 /// 自动规则里的一条条件：`变量 比较 值`

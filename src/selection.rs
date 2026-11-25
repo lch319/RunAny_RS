@@ -840,7 +840,19 @@ fn capture_trying(attempts: usize) -> Option<Rc<Selection>> {
     let t_cap = std::time::Instant::now();
     let mut backup = win32::snapshot_clipboard();
     crate::popup::timing!(t_cap, "  备份剪贴板");
-    let wait_ms = settings::read(|settings| settings.selection_wait_ms).clamp(60, 5000);
+    // 等待时长：按前台程序取（慢程序单独配长一点），没配过才用全局
+    let process = win32::process_path_of_window(target)
+        .and_then(|path| {
+            std::path::Path::new(&path)
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+        })
+        .unwrap_or_default();
+    let wait_ms = settings::read(|settings| settings.selection_wait_for(&process));
+    let wait_ms = wait_ms.clamp(30, 8000);
+    if std::env::var_os("GPUI_MENU_DEBUG_CAPTURE").is_some() {
+        eprintln!("[selection] 前台进程 {process:?} 的等待预算 {wait_ms}ms");
+    }
 
     // 最多试 3 次。为什么要重试：
     // - 快捷键刚按下时，目标窗口可能还没拿到前台 / 还没处理完按键抬起，
