@@ -1222,7 +1222,7 @@ fn execute_step(cx: &mut App, step: &ActionStep, append_selection: bool) -> Resu
                 match crate::selection::append_arg() {
                     Some(arg) => Some(arg),
                     None => {
-                        crate::selection::capture();
+                        crate::selection::capture_quick();
                         crate::selection::append_arg()
                     }
                 }

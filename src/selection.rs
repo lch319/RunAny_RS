@@ -691,7 +691,41 @@ thread_local! {
     static CAPTURING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+thread_local! {
+    /// 上一次「只抓一次」是什么时候（见 `capture_trying`）
+    static LAST_QUICK: std::cell::Cell<Option<std::time::Instant>> =
+        const { std::cell::Cell::new(None) };
+}
+
 pub fn capture() -> Option<Rc<Selection>> {
+    // 弹菜单用：最多试 3 次（焦点刚切过来、程序还在忙的时候，多发两次确实能抓到）
+    capture_trying(3)
+}
+
+/// 只发**一次**复制键的抓取。
+///
+/// 给「用快捷键直接执行菜单项」这类场景用：那里要的只是命令后面那个路径，
+/// 抓不到顶多少一个参数；而重试意味着往目标程序里连发 3 次 `Ctrl+C`
+/// ——在终端里那就是三次中断，用户看到的「按一下发了三次 Ctrl+C」就是这么来的。
+pub fn capture_quick() -> Option<Rc<Selection>> {
+    capture_trying(1)
+}
+
+fn capture_trying(attempts: usize) -> Option<Rc<Selection>> {
+    // 同一次触发里别重复发复制键：快捷键路径先抓了一次（没抓到），
+    // 紧接着 `execute_step` 又要追加选中内容——不拦一下就会再发一次。
+    // 800ms 内只认第一次的结果（抓到就沿用，没抓到就认了）。
+    if attempts == 1 {
+        let fresh = LAST_QUICK.with(|slot| {
+            slot.get()
+                .map(|at: std::time::Instant| at.elapsed() < Duration::from_millis(800))
+                .unwrap_or(false)
+        });
+        if fresh {
+            return current();
+        }
+        LAST_QUICK.with(|slot| slot.set(Some(std::time::Instant::now())));
+    }
     // 连按快捷键时，上一次可能还卡在「等修饰键 → 发 Ctrl+C → 等剪贴板」里
     // （最长几百毫秒）。再进来一次会往同一个窗口重发复制、再等一轮，几次一叠
     // 就是「连续按会卡住」。这里直接不重入：沿用上一次抓到的内容。
@@ -818,11 +852,11 @@ pub fn capture() -> Option<Rc<Selection>> {
     // 加上每轮还原剪贴板，桌面上没选中任何东西时要 1.1 秒菜单才出来 ——
     // 这才是「感觉变慢」的真凶。正常的复制几十毫秒就写完了，200ms 够用；
     // 真抓不到就快速放行。
-    const ATTEMPTS: usize = 3;
+    let attempts = attempts.max(1);
     const CAP_MS: u64 = 200;
     let mut deadline = std::time::Instant::now() + Duration::from_millis(wait_ms.min(CAP_MS));
     let mut selection = None;
-    for attempt in 0..ATTEMPTS {
+    for attempt in 0..attempts {
         // 焦点可能已经跑掉了（比如第一次发键把目标窗口激活过去之后又弹了别的东西）
         if win32::foreground_window() != target {
             win32::set_foreground(target);

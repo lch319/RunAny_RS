@@ -1096,7 +1096,9 @@ fn dispatch(target: Target, cx: &mut App) {
             // 抓了也没人用 —— 而抓一次要等剪贴板（最长半秒），连按几下就叠起来，
             // 用户看到的就是「连续按会卡住」。
             if settings::item_needs_selection(&id) {
-                crate::selection::capture();
+                // 只抓一次：这里要的只是「命令后面那个路径」，抓不到也不能
+                // 往目标程序里连发 3 次 Ctrl+C（终端里那是三次中断）
+                crate::selection::capture_quick();
             } else {
                 crate::selection::clear();
             }
