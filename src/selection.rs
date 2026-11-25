@@ -853,8 +853,11 @@ fn capture_trying(attempts: usize) -> Option<Rc<Selection>> {
     // 这才是「感觉变慢」的真凶。正常的复制几十毫秒就写完了，200ms 够用；
     // 真抓不到就快速放行。
     let attempts = attempts.max(1);
-    const CAP_MS: u64 = 200;
-    let mut deadline = std::time::Instant::now() + Duration::from_millis(wait_ms.min(CAP_MS));
+    // 以前这里还压了一个 `CAP_MS = 200` 的上限：用户把「复制后最多等待」
+    // 填成 1000ms 也只会等 200ms —— 填了等于没填（用户报的就是这个）。
+    // 现在直接按设置值走；默认 500ms，抓取最快的正常情况几十毫秒就返回了，
+    // 只有真抓不到才会用满。
+    let mut deadline = std::time::Instant::now() + Duration::from_millis(wait_ms);
     let mut selection = None;
     for attempt in 0..attempts {
         // 焦点可能已经跑掉了（比如第一次发键把目标窗口激活过去之后又弹了别的东西）
@@ -873,7 +876,9 @@ fn capture_trying(attempts: usize) -> Option<Rc<Selection>> {
         // 超时就把还按着的修饰键用 keyup「顶开」—— 效果和用户松手一样，
         // 这样按住热键也能正常抓到选中内容。
         let t_mod = std::time::Instant::now();
-        if !win32::wait_modifiers_released(if attempt == 0 { 80 } else { 40 }) {
+        // 只抓一次的场景（快捷键直接执行）多等一会儿：那一次机会更不能浪费
+        let mod_wait = if attempts == 1 { 180 } else if attempt == 0 { 80 } else { 40 };
+        if !win32::wait_modifiers_released(mod_wait) {
             win32::release_modifiers();
             // Win 键不能顶开（开始菜单会被弹出来，焦点全跑掉），只能多等一会儿
             if win32::win_key_down() {
@@ -886,6 +891,10 @@ fn capture_trying(attempts: usize) -> Option<Rc<Selection>> {
         deadline = deadline + t_mod.elapsed();
         crate::popup::timing!(t_cap, "  第{}次：修饰键处理完", attempt + 1);
 
+        // 修饰键刚松开时，目标程序的键盘状态可能还没清干净（它还在等 keyup 的处理），
+        // 这时候注入的 Ctrl+C 会被当成「组合键的一部分」丢掉 —— 这是「时而抓到
+        // 时而抓不到」最常见的一种。等一小会儿再发，比多发一次便宜得多。
+        std::thread::sleep(Duration::from_millis(if attempts == 1 { 18 } else { 8 }));
         let before = win32::clipboard_sequence();
         if let Err(err) = win32::send_keys(&keys) {
             note_failure(&format!("发不出 {keys}：{err}"));
@@ -897,15 +906,26 @@ fn capture_trying(attempts: usize) -> Option<Rc<Selection>> {
         let left = deadline
             .saturating_duration_since(std::time::Instant::now())
             .as_millis() as u64;
-        let budget = if attempt == 0 {
-            left.min(130).max(40)
+        // 第一轮给「剩余预算的一大半」：真慢的程序（Office / 大文件）写完剪贴板
+        // 常常要 300ms 以上，只给 130ms 就会误判成失败、白白多发一次复制键
+        let budget = if attempt + 1 == attempts {
+            left.max(20)
         } else {
-            left.min(80).max(25)
+            (left * 3 / 4).max(40)
         };
         if wait_for_clipboard(before, budget) {
             crate::popup::timing!(t_cap, "  第{}次：剪贴板变了", attempt + 1);
             let seq = win32::clipboard_sequence();
             selection = detect(win32::snapshot_clipboard());
+            // 有些程序是「先占位、再写数据」：序号变了但内容还没写完，这时
+            // detect 会给 None。再读几次（**不重发按键**），比多发一次 Ctrl+C
+            // 便宜得多，也不会在终端里造成中断。
+            let mut reread = 0;
+            while selection.is_none() && reread < 8 {
+                std::thread::sleep(Duration::from_millis(25));
+                selection = detect(win32::snapshot_clipboard());
+                reread += 1;
+            }
             // 只有「真把剪贴板换掉了」才需要还原，而且丢给后台线程去还原：
             // 备份里如果是一张大图，写回去要几十上百毫秒，没必要挡着菜单弹出来。
             if let Some(backup) = backup.take() {
