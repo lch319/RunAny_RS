@@ -732,7 +732,7 @@ impl SettingsView {
         };
         // 「复制后最多等待」：毫秒数，输个非法值就不写回（保持上一个有效值）
         let wait_text = settings::read(|settings| settings.selection_wait_ms.to_string());
-        let selection_wait = cx.new(|cx| TextInput::new(wait_text, "500", 11.5, cx));
+        let selection_wait = cx.new(|cx| TextInput::new(wait_text, "120", 11.5, cx));
         let wait_sub = {
             let input = selection_wait.clone();
             cx.observe(&input, move |_this, input, cx| {

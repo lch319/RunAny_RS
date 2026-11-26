@@ -2132,7 +2132,7 @@ impl MenuSettings {
             show_separators: true,
             selection_enabled: true,
             selection_copy_keys: "Ctrl+C".to_string(),
-            selection_wait_ms: 500,
+            selection_wait_ms: 120,
             context_filter: true,
             append_selection: true,
             multi_file_rule: MultiFileRule::AllSame,
@@ -7027,7 +7027,7 @@ mod tests {
         let mut settings = MenuSettings::default();
         assert!(settings.selection_enabled, "默认开启抓取选中内容");
         assert_eq!(settings.selection_copy_keys, "Ctrl+C");
-        assert_eq!(settings.selection_wait_ms, 500);
+        assert_eq!(settings.selection_wait_ms, 120);
         settings.selection_enabled = false;
         settings.selection_copy_keys = "Ctrl+Insert".to_string();
         settings.selection_wait_ms = 1200;
@@ -7045,7 +7045,7 @@ mod tests {
         let settings: MenuSettings = serde_json::from_str(json).unwrap();
         assert!(settings.selection_enabled);
         assert_eq!(settings.selection_copy_keys, "Ctrl+C");
-        assert_eq!(settings.selection_wait_ms, 500, "复制后等待默认 500ms");
+        assert_eq!(settings.selection_wait_ms, 120, "复制后等待默认 120ms");
         // 容器级 #[serde(default)] 拿的是 MenuSettings::default()，不是 bool 的 false
         assert!(settings.context_filter, "按选中内容筛选默认开着");
         assert!(settings.items[0].contexts.is_empty(), "老项都是通用项");
