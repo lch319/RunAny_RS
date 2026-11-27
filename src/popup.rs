@@ -2550,7 +2550,9 @@ fn spawn_watchdog(cx: &mut App) {
                 return;
             };
             if pinned {
-                return;
+                // 置顶期间也要**继续看着**：直接 return 会把这条监视任务结束掉，
+                // 用户取消置顶之后就再没人管「点外面该不该关」了（用户报的就是这个）
+                break;
             }
             if ours.contains(&foreground) {
                 activated = true;
@@ -2574,9 +2576,15 @@ fn spawn_watchdog(cx: &mut App) {
             };
             // 刚显示/藏过窗口：这几百毫秒里的失焦不算「用户点走了」
             let settled = grace.map_or(true, |at| at.elapsed() >= FOCUS_GRACE);
-            // 「保持显示」开着：焦点跑哪儿都不收菜单（调外观时就是要点别处）
+            // 「保持显示」开着：焦点跑哪儿都不收菜单（调外观时就是要点别处）。
+            // 但循环必须继续 —— 否则取消置顶后这条监视已经没了，点外面不关。
             if pinned {
-                return;
+                clicks = crate::win32::click_tick();
+                misses = 0;
+                cx.background_executor()
+                    .timer(Duration::from_millis(60))
+                    .await;
+                continue;
             }
             if !settled {
                 clicks = crate::win32::click_tick();

@@ -24,6 +24,10 @@ pub fn row_pad() -> f32 {
 
 /// 行区域相对卡片顶边的偏移（描边 + 内边距）
 pub fn row_area_top() -> f32 {
+    // 右键菜单 / 托盘菜单没有搜索框也没有快捷栏，那 6px 内边距留着就是一块空白
+    if !is_full_menu() {
+        return chrome();
+    }
     chrome() + row_pad()
 }
 
