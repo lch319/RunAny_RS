@@ -692,7 +692,7 @@ impl Render for ColumnView {
         if level == 0 {
             let tab_bar = crate::settings::read(|settings| settings.tab_bar.clone());
             if tab_bar.enabled {
-                card = card.child(tab_strip(&tab_bar, &state, cx));
+                card = card.child(tab_strip(&tab_bar, cx));
             }
         }
         card
@@ -702,14 +702,9 @@ impl Render for ColumnView {
 /// 菜单边缘那条浮层快捷栏（置顶 / 明暗 / 设置 / 收藏）。
 ///
 /// 全部 `.occlude()`：不挡住的话，点按钮会同时命中底下那一行，直接执行菜单项。
-fn tab_strip(
-    tab_bar: &crate::settings::TabBar,
-    state: &Entity<crate::state::MenuState>,
-    cx: &Context<ColumnView>,
-) -> AnyElement {
+fn tab_strip(tab_bar: &crate::settings::TabBar, cx: &Context<ColumnView>) -> AnyElement {
     use crate::settings::TabPosition;
 
-    let state = state.clone();
     let pinned = crate::popup::is_pinned(cx);
     let dark = crate::theme::palette().dark;
     let vertical = matches!(tab_bar.position, TabPosition::Left | TabPosition::Right);
@@ -802,40 +797,14 @@ fn tab_strip(
         ));
     }
     if tab_bar.favorites {
-        let state_for_click = state.clone();
         strip = strip.child(button(
             "tab-favorite",
             "icons/star.svg",
             false,
-            Box::new(move |cx| {
-                // 把**当前高亮那一项**加进 / 移出收藏
-                let id = {
-                    let snapshot = state_for_click.read(cx);
-                    snapshot
-                        .path
-                        .first()
-                        .copied()
-                        .and_then(|index| snapshot.entries(0).get(index).cloned())
-                        .and_then(|entry| match entry {
-                            crate::menu::MenuEntry::Item(item) => Some(item.id.to_string()),
-                            _ => None,
-                        })
-                };
-                if let Some(id) = id {
-                    let added = crate::settings::toggle_favorite(cx, &id);
-                    crate::hint::show(
-                        cx,
-                        vec![crate::hotstring::HintLine {
-                            text: if added {
-                                crate::i18n::t("已加入收藏").to_string()
-                            } else {
-                                crate::i18n::t("已取消收藏").to_string()
-                            },
-                            dim: false,
-                            id: String::new(),
-                        }],
-                    );
-                }
+            Box::new(|cx| {
+                // 跳转到收藏列表：收藏项平时被塞在一个隐藏子菜单 `__favorites__` 里
+                // （`sync_favorites` 维护），这里就是把它当普通子菜单展开
+                crate::popup::open_submenu(cx, crate::settings::FAV_ID);
             }),
         ));
     }

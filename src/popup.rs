@@ -957,6 +957,12 @@ fn run_context_action(rest: &str, cx: &mut App) {
                 }
             }
         }
+        "fav" => {
+            // 加入 / 取消收藏（右键菜单里的「★ / ☆」）
+            crate::settings::toggle_favorite(cx, id);
+            // 菜单内容要重算才有意义（收藏是「下次打开」的列表），先收起来
+            crate::popup::close_all(cx);
+        }
         "addselfull" => add_selection_items(id, true, cx),
         "addselbare" => add_selection_items(id, false, cx),
         other => eprintln!("[popup-menu] 不认识的快捷操作 {other:?}"),

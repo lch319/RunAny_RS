@@ -38,7 +38,7 @@ pub const MAGIC_ID: &str = "__magic__";
 /// 这两支「寄居」在内存树的根层，但它们不是菜单的一部分：
 /// 托盘右键菜单（`TRAY_ID`）和 一键直达的直达项（`MAGIC_ID`）。
 fn is_hidden_branch(id: &str) -> bool {
-    id == TRAY_ID || id == MAGIC_ID || id.starts_with(RULE_PREFIX)
+    id == TRAY_ID || id == MAGIC_ID || id == FAV_ID || id.starts_with(RULE_PREFIX)
 }
 
 /// 自动规则的菜单项挂在根层的一个**隐藏子菜单**里：id 带这个前缀。
@@ -46,6 +46,9 @@ fn is_hidden_branch(id: &str) -> bool {
 /// 为什么要挂进 `items`：这样「添加菜单项 / 子菜单 / 分隔线 / 拖动排序 /
 /// 编辑动作」全都能直接复用菜单项页那一整套，不用为规则另写一份。
 pub const RULE_PREFIX: &str = "__rule__";
+
+/// 「收藏」那一支的 id：菜单里的 ⭐ 按钮就是跳到它。
+pub const FAV_ID: &str = "__favorites__";
 
 /// 某条规则的容器 id。
 pub fn rule_container_id(rule_id: &str) -> String {
@@ -2394,6 +2397,41 @@ impl MenuSettings {
         container
     }
 
+    /// 重建「收藏」这一支：把收藏过的项复制进去（子菜单连同子孙一起）。
+    ///
+    /// 复制而不是移动：收藏只是**入口**，原位那条不能动。
+    /// id 加 `#fav` 后缀，免得和原项撞 id 被判成重复项。
+    pub fn sync_favorites(&mut self) {
+        let favorites = self.favorites.clone();
+        let mut children: Vec<ItemSetting> = Vec::new();
+        for id in favorites {
+            if let Some(path) = self.find_path(&id) {
+                if let Some(node) = self.node(&path) {
+                    children.push(clone_for_favorites(node));
+                }
+            }
+        }
+        // 没收藏就**别留空容器**：空子菜单本来就不显示，多一个隐藏节点只会
+        // 让「菜单项数量」「settings.json 里的 items」这些地方多一条（测试就撞上了）
+        if children.is_empty() {
+            self.items.retain(|item| item.id != FAV_ID);
+            return;
+        }
+        if let Some(node) = self.items.iter_mut().find(|item| item.id == FAV_ID) {
+            node.children = children;
+        } else {
+            let mut node = ItemSetting::item(FAV_ID, "收藏");
+            node.kind = ItemKind::Submenu;
+            node.children = children;
+            self.items.push(node);
+        }
+    }
+
+    /// 这一项收藏了吗（右键菜单要显示「收藏」还是「取消收藏」）。
+    pub fn is_favorite(&self, id: &str) -> bool {
+        self.favorites.iter().any(|fav| fav == id)
+    }
+
     /// 某条规则自己的菜单项（容器里的 children）。
     pub fn rule_items(&self, rule_id: &str) -> &[ItemSetting] {
         let container = rule_container_id(rule_id);
@@ -3268,6 +3306,7 @@ impl MenuSettings {
         self.ensure_unique_ids();
         // 规则自己的菜单项搬进隐藏容器（必须在归一之前：归一不看隐藏分支）
         self.migrate_rule_items();
+        self.sync_favorites();
         self.normalize_tree();
         // 悬停提示：老版本只有「显示动作 / 快捷键 / 备注 / 类型」四个开关，
         // 现在是一份模板 —— 把它们拼成模板，之后界面里改模板说了算
@@ -4968,16 +5007,26 @@ fn stem_of(name: &str) -> &str {
 /// 只有「按选中内容筛过」的菜单（根层项被筛掉了）才会露出来。
 /// 现在改成无条件显示：最近运行的定位就是**快捷入口**，和原位那一条并存是正常的
 /// （和「开始菜单的最近使用」一个道理），顺带还省了「翻进子菜单找」这一步。
+/// 把编辑器里的菜单项**复制一份**进收藏容器（id 加后缀，避免重复）。
+fn clone_for_favorites(item: &ItemSetting) -> ItemSetting {
+    let mut copy = item.clone();
+    copy.id = format!("{}#fav", item.id);
+    copy.children = item.children.iter().map(clone_for_favorites).collect();
+    copy
+}
+
 /// 切换某一项的收藏状态，返回「现在是收藏了吗」。
 pub fn toggle_favorite(cx: &mut gpui::App, id: &str) -> bool {
     let added = update(cx, |settings| {
-        if let Some(position) = settings.favorites.iter().position(|fav| fav == id) {
+        let added = if let Some(position) = settings.favorites.iter().position(|fav| fav == id) {
             settings.favorites.remove(position);
             false
         } else {
             settings.favorites.push(id.to_string());
             true
-        }
+        };
+        settings.sync_favorites();
+        added
     });
     added
 }
@@ -5122,7 +5171,17 @@ pub fn item_context_menu(id: &str) -> Vec<MenuEntry> {
     }) else {
         return Vec::new();
     };
+    let favorite = read(|settings| settings.is_favorite(id));
     let mut entries = vec![
+        ctx_entry(
+            format!("__ctx:fav:{id}"),
+            if favorite {
+                crate::i18n::t("取消收藏").to_string()
+            } else {
+                crate::i18n::t("加入收藏").to_string()
+            },
+            if favorite { "★" } else { "☆" },
+        ),
         ctx_entry(
             format!("__ctx:edit:{id}"),
             crate::i18n::t("编辑这一项…").to_string(),
