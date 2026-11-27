@@ -688,8 +688,170 @@ impl Render for ColumnView {
                     ),
             );
         }
+        // 浮在菜单边上的快捷栏：**不占内容位置**，盖在边缘
+        if level == 0 {
+            let tab_bar = crate::settings::read(|settings| settings.tab_bar.clone());
+            if tab_bar.enabled {
+                card = card.child(tab_strip(&tab_bar, &state, cx));
+            }
+        }
         card
     }
+}
+
+/// 菜单边缘那条浮层快捷栏（置顶 / 明暗 / 设置 / 收藏）。
+///
+/// 全部 `.occlude()`：不挡住的话，点按钮会同时命中底下那一行，直接执行菜单项。
+fn tab_strip(
+    tab_bar: &crate::settings::TabBar,
+    state: &Entity<crate::state::MenuState>,
+    cx: &Context<ColumnView>,
+) -> AnyElement {
+    use crate::settings::TabPosition;
+
+    let state = state.clone();
+    let pinned = crate::popup::is_pinned(cx);
+    let dark = crate::theme::palette().dark;
+    let vertical = matches!(tab_bar.position, TabPosition::Left | TabPosition::Right);
+
+    let mut strip = div()
+        .id(ElementId::Name("menu-tab-strip".into()))
+        .occlude()
+        .absolute()
+        .flex()
+        .gap(px(3.))
+        .p(px(3.))
+        .rounded(px(6.))
+        .bg(theme::surface_elevated())
+        .border_1()
+        .border_color(theme::border())
+        .when(vertical, |style| style.flex_col())
+        .when(!vertical, |style| style.flex_row());
+
+    // 贴边并对齐到中间
+    strip = match tab_bar.position {
+        TabPosition::Top => strip.top(px(2.)).left(px(0.)).right(px(0.)).justify_center(),
+        TabPosition::Bottom => strip.bottom(px(2.)).left(px(0.)).right(px(0.)).justify_center(),
+        TabPosition::Left => strip.left(px(2.)).top(px(0.)).bottom(px(0.)).items_center(),
+        TabPosition::Right => strip.right(px(2.)).top(px(0.)).bottom(px(0.)).items_center(),
+    };
+
+    let mut button = |id: &'static str,
+                      icon: &'static str,
+                      active: bool,
+                      on_click: Box<dyn Fn(&mut gpui::App)>|
+     -> AnyElement {
+        let mut element = div()
+            .id(ElementId::Name(format!("tab-btn-{id}").into()))
+            .occlude()
+            .size(px(20.))
+            .flex_none()
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(4.))
+            .cursor_pointer()
+            .when(active, |style| style.bg(theme::accent_soft()))
+            .hover(|style| style.bg(theme::surface_hover()))
+            .child(
+                gpui::svg()
+                    .path(icon)
+                    .size(px(12.))
+                    .flex_none()
+                    .text_color(if active {
+                        theme::accent()
+                    } else {
+                        theme::ui_text_secondary()
+                    }),
+            );
+        element = element.on_click(cx.listener(move |_this, _: &gpui::ClickEvent, window, cx| {
+            cx.stop_propagation();
+            on_click(cx);
+            window.refresh();
+            cx.notify();
+        }));
+        element.into_any_element()
+    };
+
+    if tab_bar.pin {
+        strip = strip.child(button(
+            "tab-pin",
+            "icons/pin.svg",
+            pinned,
+            Box::new(|cx| {
+                let next = !crate::popup::is_pinned(cx);
+                crate::popup::set_pinned(next, cx);
+            }),
+        ));
+    }
+    if tab_bar.theme {
+        strip = strip.child(button(
+            "tab-theme",
+            "icons/theme.svg",
+            dark,
+            Box::new(|cx| {
+                crate::settings::update(cx, |settings| {
+                    settings.theme_mode = if theme::palette().dark {
+                        crate::settings::ThemeMode::Light
+                    } else {
+                        crate::settings::ThemeMode::Dark
+                    };
+                });
+                crate::settings::reapply_theme();
+            }),
+        ));
+    }
+    if tab_bar.favorites {
+        let state_for_click = state.clone();
+        strip = strip.child(button(
+            "tab-favorite",
+            "icons/star.svg",
+            false,
+            Box::new(move |cx| {
+                // 把**当前高亮那一项**加进 / 移出收藏
+                let id = {
+                    let snapshot = state_for_click.read(cx);
+                    snapshot
+                        .path
+                        .first()
+                        .copied()
+                        .and_then(|index| snapshot.entries(0).get(index).cloned())
+                        .and_then(|entry| match entry {
+                            crate::menu::MenuEntry::Item(item) => Some(item.id.to_string()),
+                            _ => None,
+                        })
+                };
+                if let Some(id) = id {
+                    let added = crate::settings::toggle_favorite(cx, &id);
+                    crate::hint::show(
+                        cx,
+                        vec![crate::hotstring::HintLine {
+                            text: if added {
+                                crate::i18n::t("已加入收藏").to_string()
+                            } else {
+                                crate::i18n::t("已取消收藏").to_string()
+                            },
+                            dim: false,
+                            id: String::new(),
+                        }],
+                    );
+                }
+            }),
+        ));
+    }
+    if tab_bar.settings {
+        strip = strip.child(button(
+            "tab-settings",
+            "icons/gear.svg",
+            false,
+            Box::new(|cx| {
+                crate::popup::close_all(cx);
+                crate::settings_ui::open(cx);
+            }),
+        ));
+    }
+
+    strip.into_any_element()
 }
 
 /// 第一列顶上 / 底下那条搜索框。

@@ -2918,7 +2918,96 @@ impl SettingsView {
         let preview = section(
             "预览",
             "菜单出现在鼠标位置；开着「保持显示」时点别的窗口也不会收起，方便边调边看",
-            vec![div()
+            vec![
+            section(
+                "菜单快捷栏（浮层）",
+                "浮在菜单边上，不占菜单内容的位置；每个按钮都能单独关掉",
+                vec![
+                    toggle_row(
+                        "显示快捷栏",
+                        "贴在菜单边缘的一排小图标，鼠标移上去才亮",
+                        settings.tab_bar.enabled,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.tab_bar.enabled = !settings.tab_bar.enabled;
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    row_with_control(
+                        "位置",
+                        "顶 / 底 / 左 / 右，贴着菜单边",
+                        segmented(
+                            "tab-bar-position",
+                            &[(0, "顶部"), (1, "底部"), (2, "左侧"), (3, "右侧")],
+                            match settings.tab_bar.position {
+                                settings::TabPosition::Top => 0,
+                                settings::TabPosition::Bottom => 1,
+                                settings::TabPosition::Left => 2,
+                                settings::TabPosition::Right => 3,
+                            },
+                            cx.listener(|_this, value: &u32, window, cx| {
+                                let position = match *value {
+                                    0 => settings::TabPosition::Top,
+                                    2 => settings::TabPosition::Left,
+                                    3 => settings::TabPosition::Right,
+                                    _ => settings::TabPosition::Bottom,
+                                };
+                                settings::update(cx, |settings| {
+                                    settings.tab_bar.position = position;
+                                });
+                                window.refresh();
+                                cx.notify();
+                            }),
+                        ),
+                    ),
+                    toggle_row(
+                        "置顶（菜单不消失）",
+                        "点一下菜单就钉住，不会因为失焦自动收起",
+                        settings.tab_bar.pin,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| settings.tab_bar.pin = !settings.tab_bar.pin);
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
+                        "明暗主题切换",
+                        "一键在浅色 / 深色之间跳，不用进设置页",
+                        settings.tab_bar.theme,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| settings.tab_bar.theme = !settings.tab_bar.theme);
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
+                        "收藏",
+                        "把当前高亮的那一项加进收藏；收藏项会浮到菜单顶部",
+                        settings.tab_bar.favorites,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.tab_bar.favorites = !settings.tab_bar.favorites
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
+                        "打开设置",
+                        "从菜单直接跳设置页",
+                        settings.tab_bar.settings,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.tab_bar.settings = !settings.tab_bar.settings
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                ],
+            ),div()
                 .px(px(9.))
                 .py(px(6.))
                 .flex()

@@ -1387,6 +1387,12 @@ pub struct MenuSettings {
     /// 序列化成 `[]` 才不会被「缺字段 → 用默认值」又补回来。
     #[serde(default = "default_wait_rules")]
     pub selection_wait_rules: Vec<SelectionWaitRule>,
+    /// 菜单边上的浮层快捷栏
+    #[serde(default)]
+    pub tab_bar: TabBar,
+    /// 收藏的菜单项 id（菜单里会像「最近运行」一样浮到顶部）
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub favorites: Vec<String>,
     /// 打开文件夹用的命令。留空 = 用资源管理器。
     ///
     /// 支持占位符 `{path}` / `{folder}` / `{dir}`（都一样，换成那个文件夹路径），
@@ -2117,6 +2123,8 @@ impl MenuSettings {
             row_height: 24.0,
             blank_rest_ms: 260,
             selection_wait_rules: default_wait_rules(),
+            tab_bar: TabBar::default(),
+            favorites: Vec::new(),
             folder_opener: String::new(),
             auto_enabled: true,
             auto_notice: true,
@@ -3507,6 +3515,68 @@ impl MenuSettings {
     }
 }
 
+/// Tab 栏贴在菜单的哪条边。
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub enum TabPosition {
+    Top,
+    #[default]
+    Bottom,
+    Left,
+    Right,
+}
+
+impl TabPosition {
+    pub fn label(self) -> &'static str {
+        match self {
+            TabPosition::Top => "顶部",
+            TabPosition::Bottom => "底部",
+            TabPosition::Left => "左侧",
+            TabPosition::Right => "右侧",
+        }
+    }
+}
+
+/// 菜单边上那条「浮层」快捷栏。
+///
+/// 浮层的意思：**不占菜单内容的位置**，盖在边缘上；所以打开它不会让菜单变窄、
+/// 也不会把行挤歪（改布局尺寸那套很容易出「行错位」）。
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct TabBar {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub position: TabPosition,
+    /// 置顶：点一下菜单不再自动消失
+    #[serde(default = "yes")]
+    pub pin: bool,
+    /// 明暗主题快速切换
+    #[serde(default = "yes")]
+    pub theme: bool,
+    /// 打开设置
+    #[serde(default = "yes")]
+    pub settings: bool,
+    /// 收藏：把当前选中项加进 / 移出收藏
+    #[serde(default = "yes")]
+    pub favorites: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+impl Default for TabBar {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            position: TabPosition::Bottom,
+            pin: true,
+            theme: true,
+            settings: true,
+            favorites: true,
+        }
+    }
+}
+
 /// 默认给的按程序等待：两个出了名慢的（写剪贴板要几百毫秒）。
 fn default_wait_rules() -> Vec<SelectionWaitRule> {
     vec![
@@ -3754,6 +3824,11 @@ pub fn set_system_dark(dark: bool) {
         return;
     }
     SYSTEM_DARK.with(|slot| slot.set(dark));
+    apply_palette_of_current();
+}
+
+/// 主题改动之后重算配色（快捷栏切明暗用）。
+pub fn reapply_theme() {
     apply_palette_of_current();
 }
 
@@ -4893,6 +4968,52 @@ fn stem_of(name: &str) -> &str {
 /// 只有「按选中内容筛过」的菜单（根层项被筛掉了）才会露出来。
 /// 现在改成无条件显示：最近运行的定位就是**快捷入口**，和原位那一条并存是正常的
 /// （和「开始菜单的最近使用」一个道理），顺带还省了「翻进子菜单找」这一步。
+/// 切换某一项的收藏状态，返回「现在是收藏了吗」。
+pub fn toggle_favorite(cx: &mut gpui::App, id: &str) -> bool {
+    let added = update(cx, |settings| {
+        if let Some(position) = settings.favorites.iter().position(|fav| fav == id) {
+            settings.favorites.remove(position);
+            false
+        } else {
+            settings.favorites.push(id.to_string());
+            true
+        }
+    });
+    added
+}
+
+/// 收藏的项浮到菜单顶部（和「最近运行」一个道理：快捷入口，和原位那条并存）。
+pub fn append_favorites(entries: &mut Vec<MenuEntry>) {
+    let list = read(|settings| {
+        let mut list: Vec<MenuEntry> = Vec::new();
+        for id in settings.favorites.iter() {
+            let Some(item) = settings.item_by_id(id) else {
+                continue;
+            };
+            if !item.enabled || item.kind != ItemKind::Item || item.actions.is_empty() {
+                continue;
+            }
+            list.push(item.to_entry(
+                settings.show_badges,
+                settings.show_shortcuts,
+                settings.auto_icons,
+            ));
+        }
+        list
+    });
+    if list.is_empty() {
+        return;
+    }
+    let separators = read(|settings| settings.show_separators);
+    let count = list.len();
+    for entry in list.into_iter().rev() {
+        entries.insert(0, entry);
+    }
+    if separators && entries.len() > count {
+        entries.insert(count, MenuEntry::Separator);
+    }
+}
+
 pub fn append_recent(entries: &mut Vec<MenuEntry>) {
     let (list, placement, separators) = read(|settings| {
         let mut list: Vec<MenuEntry> = Vec::new();

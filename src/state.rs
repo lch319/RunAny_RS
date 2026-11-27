@@ -466,6 +466,7 @@ pub fn sample_menu_ex(filter: bool, show_all: bool) -> Vec<MenuEntry> {
             // 「最近运行」：按设置决定要不要在筛过的菜单里也出现
             let allow_recent = !filtered || settings::read(|settings| settings.recent.in_filtered);
             if allow_recent {
+                settings::append_favorites(&mut items);
                 settings::append_recent(&mut items);
             }
             // 不是完整菜单就补一条「显示全部菜单」：位置、开不开都在设置里

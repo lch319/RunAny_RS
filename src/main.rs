@@ -77,6 +77,16 @@ const TRASH_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" 
 const EYE_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></svg>"##;
 const EYE_OFF_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6.4 3.8A6.4 6.4 0 0 1 8 3.5c4 0 6.5 4.5 6.5 4.5a12 12 0 0 1-2.2 2.7"/><path d="M11 11.2A6.6 6.6 0 0 1 8 12.5C4 12.5 1.5 8 1.5 8a12 12 0 0 1 3-3.5"/><path d="M2 2l12 12"/></svg>"##;
 
+/// 置顶（图钉）。
+const PIN_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.8 1.8l4.4 4.4-2 2 .4 3.4-4.6-4.6L4.6 10 2 12.6"/><path d="M8 8L2.6 13.4"/></svg>"##;
+/// 明暗切换（半月）。
+const THEME_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13.4 9.6A5.8 5.8 0 0 1 6.4 2.6a5.8 5.8 0 1 0 7 7z"/></svg>"##;
+/// 设置（齿轮）。
+const GEAR_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v1.6M8 12.8v1.6M1.6 8h1.6M12.8 8h1.6M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1"/></svg>"##;
+/// 收藏（星）。
+const STAR_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.9l1.9 3.9 4.3.6-3.1 3 .8 4.3L8 11.6l-3.9 2.1.8-4.3-3.1-3 4.3-.6z"/></svg>"##;
+const STAR_FILLED_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M8 1.9l1.9 3.9 4.3.6-3.1 3 .8 4.3L8 11.6l-3.9 2.1.8-4.3-3.1-3 4.3-.6z"/></svg>"##;
+
 /// 菜单顶部 / 底部「还有更多」的箭头（线性 chevron，用 currentColor 跟着文字色走）。
 const ARROW_DOWN_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg>"##;
 const ARROW_UP_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 7.5L6 4l3.5 3.5"/></svg>"##;
@@ -91,6 +101,11 @@ impl AssetSource for Assets {
             "icons/trash.svg" => Some(Cow::Borrowed(TRASH_ICON.as_bytes())),
             "icons/eye.svg" => Some(Cow::Borrowed(EYE_ICON.as_bytes())),
             "icons/eye-off.svg" => Some(Cow::Borrowed(EYE_OFF_ICON.as_bytes())),
+            "icons/pin.svg" => Some(Cow::Borrowed(PIN_ICON.as_bytes())),
+            "icons/theme.svg" => Some(Cow::Borrowed(THEME_ICON.as_bytes())),
+            "icons/gear.svg" => Some(Cow::Borrowed(GEAR_ICON.as_bytes())),
+            "icons/star.svg" => Some(Cow::Borrowed(STAR_ICON.as_bytes())),
+            "icons/star-filled.svg" => Some(Cow::Borrowed(STAR_FILLED_ICON.as_bytes())),
             "icons/arrow-down.svg" => Some(Cow::Borrowed(ARROW_DOWN_ICON.as_bytes())),
             "icons/arrow-up.svg" => Some(Cow::Borrowed(ARROW_UP_ICON.as_bytes())),
             // 菜单项的图标可以是用户自己的 svg 文件：内置资源里没有就按路径读盘。
