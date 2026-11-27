@@ -181,25 +181,20 @@ pub fn set_pinned(pinned: bool, cx: &mut App) {
         // 刚打开时可能已经因为失焦被收掉了，这里不主动开菜单，只保证下一次不看焦点
         return;
     }
-    // 关掉「保持」后如果菜单还开着、而焦点已经不在菜单里，就按正常规则收起来
+    // 关掉「保持」后**不要**在这里判死。
+    //
+    // 以前是「前台不在我们窗口上就直接 close_all」：但菜单本来就不一定拿着前台
+    // （不抢焦点模式、或者用户刚点了别处），于是「取消置顶」经常直接把菜单关掉。
+    // 现在只把宽限期清掉，交给那条一直在跑的监视循环按正常规则判断
+    // （它看的是「有没有点在外面」，比看前台准）。
     if cx
         .try_global::<MenuHost>()
         .map(|host| host.live.is_some())
         .unwrap_or(false)
     {
-        let foreground = win32::foreground_window();
-        let inside = cx
-            .try_global::<MenuHost>()
-            .map(|host| {
-                host.slots
-                    .iter()
-                    .filter(|slot| slot.on_screen)
-                    .any(|slot| slot.hwnd == Some(foreground))
-            })
-            .unwrap_or(false);
-        if !inside {
-            close_all(cx);
-        }
+        cx.update_global(|host: &mut MenuHost, _app: &mut App| {
+            host.grace = None;
+        });
     }
 }
 
@@ -2688,7 +2683,9 @@ fn spawn_watchdog(cx: &mut App) {
             //    任何一个窗口上（菜单列、提示卡、设置窗口都算「里面」）。
             //    不依赖前台有没有变，所以「菜单根本没抢到前台」时照样能收。
             let now_clicks = crate::win32::click_tick();
-            if now_clicks != clicks && !crate::win32::cursor_over_self() {
+            // 宽限期内（刚弹出来 / 刚换成右键菜单 / 刚拖过）那一下点击不算「点走了」：
+            // 托盘右键就是这么把置顶菜单关掉的
+            if settled && now_clicks != clicks && !crate::win32::cursor_over_self() {
                 let _ = cx.update(|app| close_all(app));
                 return;
             }

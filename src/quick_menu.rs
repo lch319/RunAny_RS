@@ -124,6 +124,10 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
         // 圆角是**窗口裁剪区域**实现的（不是 GPUI 的 rounded）：
         // 不设就成了直角方块，和主菜单放一起看着像另一个软件
         crate::win32::set_rounded_corners(hwnd, scale);
+        // 主菜单本身是 TOPMOST，右键菜单不跟着置顶就会被它盖住（用户报的
+        // 「右键菜单被置顶菜单挡住」）。这里也设 TOPMOST —— 但**不**代表「钉住」，
+        // 它照样点外面就关。
+        let _ = crate::win32::set_topmost(hwnd, "on");
     }
 
     // 点自己外面就关：这个窗口不抢前台，所以只能靠「鼠标点了几次 + 光标在哪」判断
@@ -136,6 +140,11 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
                 crate::win32::set_rounded_corners(hwnd, scale);
             }
         }
+        // 先把基线等稳：右键那一下的点击计数会在这几十毫秒里变，
+        // 立刻开始判「点外面」就会把它当成用户点走了（表现为「一闪就关」）
+        cx.background_executor()
+            .timer(std::time::Duration::from_millis(220))
+            .await;
         let mut clicks = crate::win32::click_tick();
         loop {
             cx.background_executor()

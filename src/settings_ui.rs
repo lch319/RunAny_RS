@@ -2920,213 +2920,6 @@ impl SettingsView {
             "菜单出现在鼠标位置；开着「保持显示」时点别的窗口也不会收起，方便边调边看",
             vec![
             section(
-                "菜单快捷栏（浮层）",
-                "浮在菜单边上，不占菜单内容的位置；每个按钮都能单独关掉",
-                vec![
-                    toggle_row(
-                        "显示快捷栏",
-                        "贴在菜单边缘的一排小图标，鼠标移上去才亮",
-                        settings.tab_bar.enabled,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| {
-                                settings.tab_bar.enabled = !settings.tab_bar.enabled;
-                            });
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
-                    row_with_control(
-                        "位置",
-                        "贴在菜单的上边或下边，占一条 26px 的带子",
-                        segmented(
-                            "tab-bar-position",
-                            &[(0, "顶部"), (1, "底部")],
-                            match settings.tab_bar.position {
-                                settings::TabPosition::Top => 0,
-                                // 左右侧已废弃：老的配置显示成「底部」
-                                _ => 1,
-                            },
-                            cx.listener(|_this, value: &u32, window, cx| {
-                                let position = match *value {
-                                    0 => settings::TabPosition::Top,
-                                    _ => settings::TabPosition::Bottom,
-                                };
-                                settings::update(cx, |settings| {
-                                    settings.tab_bar.position = position;
-                                });
-                                window.refresh();
-                                cx.notify();
-                            }),
-                        ),
-                    ),
-                    toggle_row(
-                        "置顶（菜单不消失）",
-                        "点一下菜单就钉住，不会因为失焦自动收起",
-                        settings.tab_bar.pin,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| settings.tab_bar.pin = !settings.tab_bar.pin);
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
-                    toggle_row(
-                        "明暗主题切换",
-                        "一键在浅色 / 深色之间跳，不用进设置页",
-                        settings.tab_bar.theme,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| settings.tab_bar.theme = !settings.tab_bar.theme);
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
-                    toggle_row(
-                        "收藏",
-                        "把当前高亮的那一项加进收藏；收藏项会浮到菜单顶部",
-                        settings.tab_bar.favorites,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| {
-                                settings.tab_bar.favorites = !settings.tab_bar.favorites
-                            });
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
-                    toggle_row(
-                        "执行动作前重新抓取选中内容",
-                        "置顶菜单放着的时候你可能又选了别的内容：开启后每次执行都会现场重抓一次，用的是最新选中的那份",
-                        settings.recapture_before_run,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| {
-                                settings.recapture_before_run = !settings.recapture_before_run
-                            });
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
-                    toggle_row(
-                        "不抢焦点",
-                        "呼出菜单不夺取前台：在重命名文件、编辑框里按快捷键，原来那个光标不会丢；代价是搜索框和上下键用不了，只能用鼠标点",
-                        settings.menu_no_focus,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| {
-                                settings.menu_no_focus = !settings.menu_no_focus
-                            });
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
-                    toggle_row(
-                        "置顶时点了不收起",
-                        "钉住状态下点菜单项 / 右键都不关闭，方便连着点几项",
-                        settings.pin_stays_open,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| {
-                                settings.pin_stays_open = !settings.pin_stays_open
-                            });
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
-                    toggle_row(
-                        "打开设置",
-                        "从菜单直接跳设置页",
-                        settings.tab_bar.settings,
-                        cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            settings::update(cx, |settings| {
-                                settings.tab_bar.settings = !settings.tab_bar.settings
-                            });
-                            window.refresh();
-                            cx.notify();
-                        }),
-                    ),
-                ],
-            ),div()
-                .px(px(9.))
-                .py(px(6.))
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .child(primary_button(
-                    if menu_open {
-                        "关闭菜单"
-                    } else {
-                        "打开菜单试试"
-                    },
-                    cx.listener(|_this, _: &ClickEvent, _window, cx| {
-                        popup::toggle(cx);
-                    }),
-                ))
-                // 保持显示：开着的时候 watchdog 不再因为失焦收起菜单
-                .child(
-                    div()
-                        .id("pin-menu-hold")
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .px(px(8.))
-                        .py(px(3.))
-                        .rounded(px(theme::RADIUS_ROW))
-                        .cursor_pointer()
-                        .hover(|style| style.bg(theme::surface_hover()))
-                        .on_click(cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            let next = !popup::is_pinned(cx);
-                            popup::set_pinned(next, cx);
-                            window.refresh();
-                            cx.notify();
-                        }))
-                        .child(
-                            div()
-                                .text_size(px(11.5))
-                                .text_color(theme::text_primary())
-                                .child(crate::i18n::t("保持显示")),
-                        )
-                        .child(switch(pinned)),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(px(10.5))
-                        .text_color(theme::ui_text_tertiary())
-                        .child(if crate::i18n::is_english() {
-                            format!(
-                                "Hotkey {} pops up in any app",
-                                settings.popup_hotkey.trim()
-                            )
-                        } else {
-                            format!(
-                                "快捷键 {} 在任何应用里都能唤出",
-                                settings.popup_hotkey.trim()
-                            )
-                        }),
-                )
-                .into_any_element()],
-        );
-
-        vec![
-            preview,
-            section(
-                "主题配色",
-                "点一下整套换掉（浅色 / 深色各一份，跟随系统时两个模式都好看）；下面还能继续细调",
-                vec![div()
-                    .px(px(6.))
-                    .pb(px(4.))
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(6.))
-                    .children(
-                        theme::PRESETS
-                            .iter()
-                            .enumerate()
-                            .map(|(index, preset)| {
-                                preset_card(preset, preset.matches(&settings.light, &settings.dark), index, cx)
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                    .into_any_element()],
-            ),
-            section(
                 "配色",
                 "点色块即时预览；＋ 打开颜色面板（点色块 / 手填实时预览，按「确定」才算数，点外面取消）。「边框」是菜单卡片那一圈描边，不要就在「尺寸」里把「显示边框」关掉",
                 vec![
@@ -3391,6 +3184,201 @@ impl SettingsView {
                         ),
                     ),
                 ],
+            ),
+            section(
+                "菜单快捷栏（浮层）",
+                "浮在菜单边上，不占菜单内容的位置；每个按钮都能单独关掉",
+                vec![
+                    toggle_row(
+                        "显示快捷栏",
+                        "贴在菜单边缘的一排小图标，鼠标移上去才亮",
+                        settings.tab_bar.enabled,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.tab_bar.enabled = !settings.tab_bar.enabled;
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    row_with_control(
+                        "位置",
+                        "贴在菜单的上边或下边，占一条 26px 的带子",
+                        segmented(
+                            "tab-bar-position",
+                            &[(0, "顶部"), (1, "底部")],
+                            match settings.tab_bar.position {
+                                settings::TabPosition::Top => 0,
+                                // 左右侧已废弃：老的配置显示成「底部」
+                                _ => 1,
+                            },
+                            cx.listener(|_this, value: &u32, window, cx| {
+                                let position = match *value {
+                                    0 => settings::TabPosition::Top,
+                                    _ => settings::TabPosition::Bottom,
+                                };
+                                settings::update(cx, |settings| {
+                                    settings.tab_bar.position = position;
+                                });
+                                window.refresh();
+                                cx.notify();
+                            }),
+                        ),
+                    ),
+                    toggle_row(
+                        "置顶（菜单不消失）",
+                        "点一下菜单就钉住，不会因为失焦自动收起",
+                        settings.tab_bar.pin,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| settings.tab_bar.pin = !settings.tab_bar.pin);
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
+                        "明暗主题切换",
+                        "一键在浅色 / 深色之间跳，不用进设置页",
+                        settings.tab_bar.theme,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| settings.tab_bar.theme = !settings.tab_bar.theme);
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
+                        "收藏",
+                        "把当前高亮的那一项加进收藏；收藏项会浮到菜单顶部",
+                        settings.tab_bar.favorites,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.tab_bar.favorites = !settings.tab_bar.favorites
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
+                        "执行动作前重新抓取选中内容",
+                        "置顶菜单放着的时候你可能又选了别的内容：开启后每次执行都会现场重抓一次，用的是最新选中的那份",
+                        settings.recapture_before_run,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.recapture_before_run = !settings.recapture_before_run
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
+                        "置顶时点了不收起",
+                        "钉住状态下点菜单项 / 右键都不关闭，方便连着点几项",
+                        settings.pin_stays_open,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.pin_stays_open = !settings.pin_stays_open
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
+                        "打开设置",
+                        "从菜单直接跳设置页",
+                        settings.tab_bar.settings,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.tab_bar.settings = !settings.tab_bar.settings
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                ],
+            ),div()
+                .px(px(9.))
+                .py(px(6.))
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .child(primary_button(
+                    if menu_open {
+                        "关闭菜单"
+                    } else {
+                        "打开菜单试试"
+                    },
+                    cx.listener(|_this, _: &ClickEvent, _window, cx| {
+                        popup::toggle(cx);
+                    }),
+                ))
+                // 保持显示：开着的时候 watchdog 不再因为失焦收起菜单
+                .child(
+                    div()
+                        .id("pin-menu-hold")
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .px(px(8.))
+                        .py(px(3.))
+                        .rounded(px(theme::RADIUS_ROW))
+                        .cursor_pointer()
+                        .hover(|style| style.bg(theme::surface_hover()))
+                        .on_click(cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            let next = !popup::is_pinned(cx);
+                            popup::set_pinned(next, cx);
+                            window.refresh();
+                            cx.notify();
+                        }))
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .text_color(theme::text_primary())
+                                .child(crate::i18n::t("保持显示")),
+                        )
+                        .child(switch(pinned)),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(10.5))
+                        .text_color(theme::ui_text_tertiary())
+                        .child(if crate::i18n::is_english() {
+                            format!(
+                                "Hotkey {} pops up in any app",
+                                settings.popup_hotkey.trim()
+                            )
+                        } else {
+                            format!(
+                                "快捷键 {} 在任何应用里都能唤出",
+                                settings.popup_hotkey.trim()
+                            )
+                        }),
+                )
+                .into_any_element()],
+        );
+
+        vec![
+            preview,
+            section(
+                "主题配色",
+                "点一下整套换掉（浅色 / 深色各一份，跟随系统时两个模式都好看）；下面还能继续细调",
+                vec![div()
+                    .px(px(6.))
+                    .pb(px(4.))
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(6.))
+                    .children(
+                        theme::PRESETS
+                            .iter()
+                            .enumerate()
+                            .map(|(index, preset)| {
+                                preset_card(preset, preset.matches(&settings.light, &settings.dark), index, cx)
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .into_any_element()],
             ),
             // 悬停提示：鼠标在菜单项上停一会儿，弹一张小卡片说明它是什么
             {
@@ -5487,6 +5475,18 @@ impl SettingsView {
                                 .into_any_element(),
                         )
                     },
+                    toggle_row(
+                        "不抢焦点",
+                        "呼出菜单不夺取前台：在重命名文件、编辑框里按快捷键，原来那个光标不会丢；代价是搜索框和上下键用不了，只能用鼠标点",
+                        settings.menu_no_focus,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.menu_no_focus = !settings.menu_no_focus
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
                     toggle_row(
                         "运行程序时接上选中内容（默认）",
                         "所有「运行程序」动作的默认值：命令末尾补一个空格再拼上选中内容；菜单项里可以单独设成开启 / 关闭，优先级高于这里",
