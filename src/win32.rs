@@ -698,6 +698,25 @@ mod imp {
     /// `SetWindowPos` 抢着摆位置等原因把它吞掉。只看自己记的「上次请求的高度」
     /// 就会以为已经改好了，于是菜单卡在旧高度上：内容超出 → 多出一条滚动条和
     /// 底部的「还有更多」箭头。所以要能读回真实值来对账。
+    /// 客户区左上角在屏幕上的位置（物理像素）。
+    ///
+    /// 菜单原点 `live.origin` 说的就是这个点；用 `window_rect_exact` 拿到的是
+    /// **含阴影/不可见边框**的窗口矩形，差几个像素，拖完窗口再展开子菜单就会错位。
+    pub fn client_origin(hwnd: isize) -> Option<(i32, i32)> {
+        use windows_sys::Win32::Foundation::POINT;
+        use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
+        if hwnd == 0 {
+            return None;
+        }
+        let mut point = POINT { x: 0, y: 0 };
+        unsafe {
+            if ClientToScreen(hwnd as HWND, &mut point) == 0 {
+                return None;
+            }
+        }
+        Some((point.x, point.y))
+    }
+
     pub fn client_size(hwnd: isize) -> Option<(i32, i32)> {
         if hwnd == 0 {
             return None;
@@ -4256,7 +4275,7 @@ pub use imp::{
     watch_foreground, window_process_id,
     process_name_of_window, input_context, preview_context, context_of_window,
     foreground_process_name, window_at_cursor, selection_target,
-    caps_lock_on, window_rect_exact, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
+    caps_lock_on, window_rect_exact, client_origin, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
     process_path_of_window,
     sibling_processes, open_file_location, open_folder, open_url, enable_window, set_no_activate,
     system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,

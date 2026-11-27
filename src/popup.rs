@@ -134,7 +134,7 @@ pub fn is_open(cx: &App) -> bool {
 /// 「保持显示」当前是开还是关。
 /// 窗口被拖动之后，把菜单原点校正到窗口的真实位置。
 pub fn rebase_origin(hwnd: isize, cx: &mut App) {
-    let Some((left, top, _, _)) = win32::window_rect_exact(hwnd) else {
+    let Some((left, top)) = win32::client_origin(hwnd) else {
         return;
     };
     let scale = menu_scale(cx);
@@ -1971,6 +1971,13 @@ fn place(
     scale: f32,
     revision: u64,
 ) -> bool {
+    // 先把「不抢焦点」按到这一列上：必须在 ShowWindow 之前生效，
+    // 否则新露脸的子菜单窗口照样会抢一次前台（用户的焦点就丢了）
+    if settings::read(|settings| settings.menu_no_focus) {
+        if let Some(hwnd) = slot.hwnd {
+            win32::set_no_activate(hwnd, true);
+        }
+    }
     // 列宽（多列时是一整张卡片的总宽）、列高都可能被设置改，两者都要跟着 resize。
     //
     // **判定依据是系统里的真实客户区，不是自己记的 `slot.height`。**
@@ -2090,6 +2097,14 @@ fn place(
             width,
             slot.hwnd.and_then(win32::window_rect)
         );
+    }
+    // 不抢焦点模式下，每一列**刚显示**时都要补一次 NOACTIVATE：
+    // 窗口池里的窗口是新建/复用的，只在打开菜单那一刻设过，
+    // 展开子菜单时新露出来的那列还是会抢前台（用户报的就是这个）
+    if settings::read(|settings| settings.menu_no_focus) {
+        if let Some(hwnd) = slot.hwnd {
+            win32::set_no_activate(hwnd, true);
+        }
     }
     slot.x = x;
     slot.y = y;
