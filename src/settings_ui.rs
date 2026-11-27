@@ -2992,6 +2992,18 @@ impl SettingsView {
                         }),
                     ),
                     toggle_row(
+                        "执行动作前重新抓取选中内容",
+                        "置顶菜单放着的时候你可能又选了别的内容：开启后每次执行都会现场重抓一次，用的是最新选中的那份",
+                        settings.recapture_before_run,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.recapture_before_run = !settings.recapture_before_run
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
                         "不抢焦点",
                         "呼出菜单不夺取前台：在重命名文件、编辑框里按快捷键，原来那个光标不会丢；代价是搜索框和上下键用不了，只能用鼠标点",
                         settings.menu_no_focus,

@@ -132,6 +132,28 @@ pub fn is_open(cx: &App) -> bool {
 }
 
 /// 「保持显示」当前是开还是关。
+/// 窗口被拖动之后，把菜单原点校正到窗口的真实位置。
+pub fn rebase_origin(hwnd: isize, cx: &mut App) {
+    let Some((left, top, _, _)) = win32::window_rect_exact(hwnd) else {
+        return;
+    };
+    let scale = menu_scale(cx);
+    let origin = gpui::point(gpui::px(left as f32 / scale), gpui::px(top as f32 / scale));
+    cx.update_global(|host: &mut MenuHost, _app: &mut App| {
+        if let Some(live) = host.live.as_mut() {
+            live.origin = origin;
+        }
+    });
+    sync(cx);
+}
+
+/// 当前菜单的缩放比（拖窗口校正原点时要用）。
+pub fn menu_scale(cx: &App) -> f32 {
+    cx.try_global::<MenuHost>()
+        .and_then(|host| host.live.as_ref().map(|live| live.scale))
+        .unwrap_or(1.0)
+}
+
 pub fn is_pinned(cx: &App) -> bool {
     cx.try_global::<MenuHost>()
         .map(|host| host.is_pinned())
@@ -2562,6 +2584,11 @@ fn spawn_watchdog(cx: &mut App) {
             if pinned {
                 // 置顶期间也要**继续看着**：直接 return 会把这条监视任务结束掉，
                 // 用户取消置顶之后就再没人管「点外面该不该关」了（用户报的就是这个）
+                break;
+            }
+            // 不抢焦点模式：我们永远不会拿到前台，等激活是白等 2 秒
+            // （这 2 秒里的点击还会被当成「刚打开」吞掉）
+            if settings::read(|settings| settings.menu_no_focus) {
                 break;
             }
             if ours.contains(&foreground) {

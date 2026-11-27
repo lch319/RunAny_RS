@@ -154,7 +154,14 @@ pub fn value(name: &str) -> Option<String> {
             // 菜单「置顶」着放了很久、或者是直接按快捷键执行某一项时，
             // 打开那一刻抓到的内容可能已经没了（或者根本没抓过）。
             // 这里补一次现场抓取，别让「用指定网址搜选中内容」发出一个空搜索。
-            let current = selection::current();
+            //
+            // 另外：用户开了「执行前重新抓取」时，**无条件**重抓一次 ——
+            // 置顶菜单放了一整天，期间又选了别的东西，他要的是后来选的那个。
+            let current = if crate::settings::read(|settings| settings.recapture_before_run) {
+                selection::capture_quick()
+            } else {
+                selection::current()
+            };
             let current = if current.is_none() {
                 selection::capture_quick()
             } else {

@@ -1393,6 +1393,9 @@ pub struct MenuSettings {
     /// 菜单边上的浮层快捷栏
     #[serde(default)]
     pub tab_bar: TabBar,
+    /// 执行动作前重新抓一次选中内容（菜单置顶放久了、用户又选了别的内容时用）
+    #[serde(default)]
+    pub recapture_before_run: bool,
     /// 呼出菜单时不抢前台焦点（重命名文件时按快捷键，输入框不会失焦）
     #[serde(default)]
     pub menu_no_focus: bool,
@@ -2133,6 +2136,7 @@ impl MenuSettings {
             blank_rest_ms: 260,
             selection_wait_rules: default_wait_rules(),
             tab_bar: TabBar::default(),
+            recapture_before_run: false,
             menu_no_focus: false,
             pin_stays_open: true,
             favorites: Vec::new(),

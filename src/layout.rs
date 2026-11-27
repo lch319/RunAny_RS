@@ -427,7 +427,10 @@ pub fn tab_side_w(_level: usize) -> f32 {
 }
 
 pub fn header_h(level: usize) -> f32 {
-    let search = if level == 0 && search_place() == settings::SearchPlace::Top {
+    // 判断依据必须是「搜索框这一步真的会画出来」（`search_top`），
+    // 而不是「设置里选了顶部」——右键菜单 / 托盘菜单不画搜索框，
+    // 但以前的写法照样给它留了 31px，那就是用户看到的「顶部空白」
+    let search = if search_top(level).is_some() {
         SEARCH_H + SEARCH_GAP
     } else {
         0.0
@@ -437,7 +440,7 @@ pub fn header_h(level: usize) -> f32 {
 
 /// 第 `level` 列底部的额外留白（搜索框放底部时）。
 pub fn footer_h(level: usize) -> f32 {
-    let search = if level == 0 && search_place() == settings::SearchPlace::Bottom {
+    let search = if search_bottom(level).is_some() {
         SEARCH_H + SEARCH_GAP
     } else {
         0.0

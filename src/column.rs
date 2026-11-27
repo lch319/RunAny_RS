@@ -733,10 +733,14 @@ fn tab_strip(
         .id(ElementId::Name("menu-tab-strip".into()))
         .occlude()
         // 按住快捷栏拖动 = 把菜单挪个位置（和拖标题栏一个味道）
-        .on_mouse_down(gpui::MouseButton::Left, move |_event, _window, _cx| {
-            if let Some(hwnd) = hwnd {
-                crate::win32::start_system_drag(hwnd, crate::win32::HT_CAPTION);
-            }
+        .on_mouse_down(gpui::MouseButton::Left, move |_event, _window, cx| {
+            let Some(hwnd) = hwnd else {
+                return;
+            };
+            // 系统拖动是阻塞的：回到这里时窗口已经被挪走了
+            crate::win32::start_system_drag(hwnd, crate::win32::HT_CAPTION);
+            // 把「菜单原点」校正到新位置，否则子菜单还按老原点展开（用户报的错位）
+            crate::popup::rebase_origin(hwnd, cx);
         })
         .absolute()
         .flex()
