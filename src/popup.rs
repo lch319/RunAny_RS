@@ -452,6 +452,12 @@ pub fn open_item_context(cx: &mut App, id: &str) {
     if entries.is_empty() {
         return;
     }
+    // 主菜单是**置顶**着的：另开一扇小窗显示右键菜单。
+    // 不能沿用「换掉主菜单内容」那套 —— 那等于把置顶菜单顶掉了。
+    if cx.global::<MenuHost>().live.is_some() && is_pinned(cx) {
+        crate::quick_menu::open(entries, cx);
+        return;
+    }
     if cx.global::<MenuHost>().live.is_some() {
         let (cursor_pos, screen, scale) = cursor::anchor(cx);
         let width = root_width(cx, &entries);
@@ -892,6 +898,26 @@ pub fn finish(id: SharedString, label: SharedString, actions: Vec<ActionStep>, c
 }
 
 /// 菜单项右键菜单里那几条（`__ctx:` 后面那半截）。
+/// 快捷菜单（独立窗口）点到一条时走这里：右键命令走 `run_context_action`，
+/// 普通项走 `finish`（和主菜单点一下完全一样）。
+pub fn run_entry(id: SharedString, label: SharedString, cx: &mut App) {
+    if let Some(rest) = id.strip_prefix("__ctx:") {
+        close_all(cx);
+        run_context_action(rest, cx);
+        return;
+    }
+    let actions = crate::settings::read(|settings| {
+        settings
+            .find_path(&id)
+            .and_then(|path| settings.node(&path))
+            .map(|item| item.actions.clone())
+            .unwrap_or_default()
+    });
+    crate::settings::record_recent(cx, &id);
+    let append = crate::settings::appends_selection(&id);
+    run_actions(actions, append, None, false, cx);
+}
+
 fn run_context_action(rest: &str, cx: &mut App) {
     let (command, id) = match rest.split_once(':') {
         Some((command, id)) => (command, id),

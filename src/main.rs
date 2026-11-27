@@ -13,6 +13,7 @@ mod backup;
 mod chrome;
 mod column;
 mod confirm;
+mod quick_menu;
 mod cursor;
 mod everything;
 mod hint;
