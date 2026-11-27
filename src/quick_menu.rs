@@ -27,6 +27,8 @@ const PAD: f32 = 6.0;
 thread_local! {
     static ENTRIES: RefCell<Vec<MenuItem>> = const { RefCell::new(Vec::new()) };
     static HOVER: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
+    /// 这次弹出用的尺寸（渲染时要照着画，否则 GPUI 会按内容重算，宽度对不上）
+    static SIZE: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((220.0, 120.0)) };
     static WINDOW: std::cell::Cell<Option<gpui::AnyWindowHandle>> = const { std::cell::Cell::new(None) };
 }
 
@@ -39,6 +41,9 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
             _ => None,
         })
         .collect();
+    if std::env::var_os("GPUI_MENU_DEBUG_QUICK").is_some() {
+        eprintln!("[quick] 打开：{} 条", items.len());
+    }
     if items.is_empty() {
         return;
     }
@@ -46,9 +51,23 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
 
     let rows = items.len();
     let height = rows as f32 * ROW_H + PAD * 2.0;
-    let width = 220.0_f32;
+    // 宽度按最长那条估：以前写死 220，长条目（「把选中的 1 个文件 / 文件夹加到这一项」）
+    // 右边就被切掉了 —— 用户报的「右侧没显示完整」
+    let widest = items
+        .iter()
+        .map(|item| {
+            let text_w: f32 = item
+                .label
+                .chars()
+                .map(|ch| if ch.is_ascii() { 7.0 } else { 12.5 })
+                .sum();
+            text_w + 14.0 + 8.0 + 20.0
+        })
+        .fold(0.0_f32, f32::max);
+    let width = widest.clamp(180.0, 360.0).ceil();
 
     ENTRIES.with(|slot| *slot.borrow_mut() = items);
+    SIZE.with(|slot| slot.set((width, height)));
     HOVER.with(|slot| slot.set(usize::MAX));
 
     let (cursor, screen, scale) = crate::cursor::anchor(cx);
@@ -77,6 +96,7 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
             kind: gpui::WindowKind::PopUp,
             is_resizable: false,
             is_movable: false,
+            window_min_size: Some(size(px(width), px(height))),
             focus: false,
             show: true,
             window_background: gpui::WindowBackgroundAppearance::Opaque,
@@ -84,8 +104,12 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
         },
         |_window, cx| cx.new(QuickMenu::new),
     );
-    let Ok(handle) = opened else {
-        return;
+    let handle = match opened {
+        Ok(handle) => handle,
+        Err(err) => {
+            eprintln!("[quick] 开窗失败：{err:?}");
+            return;
+        }
     };
     WINDOW.with(|slot| slot.set(Some(gpui::AnyWindowHandle::from(handle))));
     let _ = scale;
@@ -97,10 +121,21 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
         if crate::settings::read(|settings| settings.menu_no_focus) {
             crate::win32::set_no_activate(hwnd, true);
         }
+        // 圆角是**窗口裁剪区域**实现的（不是 GPUI 的 rounded）：
+        // 不设就成了直角方块，和主菜单放一起看着像另一个软件
+        crate::win32::set_rounded_corners(hwnd, scale);
     }
 
     // 点自己外面就关：这个窗口不抢前台，所以只能靠「鼠标点了几次 + 光标在哪」判断
     let task = cx.spawn(async move |cx| {
+        // 圆角裁剪区域：这里再补一次（按客户区尺寸认出自己那扇窗，
+        // 开窗那一刻拿到的句柄有时还没量出尺寸，设了也不生效）
+        let want = (width as i32, height as i32);
+        for hwnd in crate::win32::zed_window_handles() {
+            if crate::win32::client_size(hwnd) == Some(want) {
+                crate::win32::set_rounded_corners(hwnd, scale);
+            }
+        }
         let mut clicks = crate::win32::click_tick();
         loop {
             cx.background_executor()
@@ -144,18 +179,22 @@ impl QuickMenu {
 impl Render for QuickMenu {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let items = ENTRIES.with(|slot| slot.borrow().clone());
+        let (width, height) = SIZE.with(|slot| slot.get());
         let mut list = div()
-            .size_full()
+            .w(px(width))
+            .h(px(height))
             .flex()
             .flex_col()
             .p(px(PAD))
             .bg(theme::surface_elevated())
             .border_1()
             .border_color(theme::border())
+            .shadow_sm()
             .rounded(px(8.));
 
         for (index, item) in items.into_iter().enumerate() {
             let hovered = HOVER.with(|slot| slot.get()) == index;
+            let badge = item.badge.clone();
             let id = item.id.clone();
             let label = item.label.clone();
             let label_for_click = label.clone();
@@ -180,6 +219,16 @@ impl Render for QuickMenu {
                         close(cx);
                         crate::popup::run_entry(id.clone(), label_for_click.clone(), cx);
                     }))
+                    .when_some(badge, |row, badge| {
+                        row.child(
+                            div()
+                                .w(px(14.))
+                                .flex_none()
+                                .text_size(px(11.))
+                                .text_color(theme::ui_text_tertiary())
+                                .child(badge),
+                        )
+                    })
                     .child(label),
             );
         }

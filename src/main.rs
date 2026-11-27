@@ -343,10 +343,31 @@ fn main() {
                 cx.background_executor()
                     .timer(Duration::from_millis(900))
                     .await;
-                let _ = cx.update(|app| popup::open(app));
+                let _ = cx.update(|app| {
+                    popup::open(app);
+                    // 截图核对版式时把菜单钉住，否则它会因为「失焦」立刻收起
+                    if std::env::var_os("GPUI_MENU_DEBUG_MENU_PIN").is_some() {
+                        popup::set_pinned(true, app);
+                    }
+                });
             })
             .detach();
         }
+        // 调试用：`GPUI_MENU_DEBUG_CONTEXT=<条目 id>` 菜单弹出后再弹这一项的右键菜单
+        // （核对「置顶菜单 + 右键菜单共存」用）
+        if let Some(id) = std::env::var("GPUI_MENU_DEBUG_CONTEXT")
+            .ok()
+            .filter(|value| !value.is_empty())
+        {
+            cx.spawn(async move |cx| {
+                cx.background_executor()
+                    .timer(Duration::from_millis(1600))
+                    .await;
+                let _ = cx.update(|app| popup::open_item_context(app, &id));
+            })
+            .detach();
+        }
+
         // 调试用：`GPUI_MENU_DEBUG_OPEN=工具,截图` 菜单弹出后按名称展开到那一层
         if let Ok(labels) = std::env::var("GPUI_MENU_DEBUG_OPEN") {
             let labels: Vec<String> = labels

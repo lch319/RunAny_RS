@@ -2132,6 +2132,12 @@ fn place(
             win32::set_no_activate(hwnd, true);
         }
     }
+    // 圆角裁剪区域是按**当时的客户区大小**算的：这里刚 resize 过，
+    // 不补一次就会用上一轮的小区域去裁 —— 右侧/底部被切掉一块，或者
+    // 圆角只剩两个（用户报的「偶尔右侧没显示完整 / 没有圆角」）。
+    if let Some(hwnd) = slot.hwnd {
+        win32::set_rounded_corners(hwnd, scale);
+    }
     slot.x = x;
     slot.y = y;
     slot.on_screen = true;
