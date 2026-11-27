@@ -498,8 +498,18 @@ impl Render for ColumnView {
                 layout::measure_text(system, &family, size, text)
             })
         };
+        // 快捷栏贴在左边时，整片行区域往右让一条（贴右边则收窄行宽）
+        let side_w = layout::tab_side_w(level);
+        let shift_right = if side_w > 0.0
+            && crate::settings::read(|settings| {
+                matches!(settings.tab_bar.position, crate::settings::TabPosition::Left)
+            }) {
+            side_w
+        } else {
+            0.0
+        };
         let mut stacks: Vec<AnyElement> = Vec::with_capacity(groups.len());
-        let mut left = 0.0_f32;
+        let mut left = shift_right;
         for (group, &(start, end)) in groups.iter().enumerate() {
             let panel = widths.get(group).copied().unwrap_or_else(layout::panel_width);
             let slice = &entries[start..end];
@@ -514,7 +524,8 @@ impl Render for ColumnView {
                     layout::SCROLLBAR_HIT_W
                 } else {
                     0.0
-                };
+                }
+                - side_w;
             let row_w = (stack_w - 8.0 - 16.0).max(40.0);
 
             let mut stack = div()
@@ -692,7 +703,7 @@ impl Render for ColumnView {
         if level == 0 {
             let tab_bar = crate::settings::read(|settings| settings.tab_bar.clone());
             if tab_bar.enabled {
-                card = card.child(tab_strip(&tab_bar, cx));
+                card = card.child(tab_strip(&tab_bar, viewport, cx));
             }
         }
         card
@@ -702,9 +713,14 @@ impl Render for ColumnView {
 /// 菜单边缘那条浮层快捷栏（置顶 / 明暗 / 设置 / 收藏）。
 ///
 /// 全部 `.occlude()`：不挡住的话，点按钮会同时命中底下那一行，直接执行菜单项。
-fn tab_strip(tab_bar: &crate::settings::TabBar, cx: &Context<ColumnView>) -> AnyElement {
+fn tab_strip(
+    tab_bar: &crate::settings::TabBar,
+    viewport: f32,
+    cx: &Context<ColumnView>,
+) -> AnyElement {
     use crate::settings::TabPosition;
 
+    let level = 0;
     let pinned = crate::popup::is_pinned(cx);
     let dark = crate::theme::palette().dark;
     let vertical = matches!(tab_bar.position, TabPosition::Left | TabPosition::Right);
@@ -715,20 +731,39 @@ fn tab_strip(tab_bar: &crate::settings::TabBar, cx: &Context<ColumnView>) -> Any
         .absolute()
         .flex()
         .gap(px(3.))
-        .p(px(3.))
-        .rounded(px(6.))
+        .px(px(4.))
         .bg(theme::surface_elevated())
-        .border_1()
         .border_color(theme::border())
-        .when(vertical, |style| style.flex_col())
-        .when(!vertical, |style| style.flex_row());
+        .when(vertical, |style| style.flex_col().py(px(4.)).border_r_1())
+        .when(!vertical, |style| style.flex_row().py(px(2.)).border_b_1());
 
-    // 贴边并对齐到中间
+    // 占位模式：贴在边上的一条**独立带子**，行区域已经由 layout 让开了
     strip = match tab_bar.position {
-        TabPosition::Top => strip.top(px(2.)).left(px(0.)).right(px(0.)).justify_center(),
-        TabPosition::Bottom => strip.bottom(px(2.)).left(px(0.)).right(px(0.)).justify_center(),
-        TabPosition::Left => strip.left(px(2.)).top(px(0.)).bottom(px(0.)).items_center(),
-        TabPosition::Right => strip.right(px(2.)).top(px(0.)).bottom(px(0.)).items_center(),
+        TabPosition::Top => strip
+            .top(px(0.))
+            .left(px(0.))
+            .right(px(0.))
+            .h(px(layout::TAB_H))
+            .items_center(),
+        TabPosition::Bottom => strip
+            .bottom(px(0.))
+            .left(px(0.))
+            .right(px(0.))
+            .h(px(layout::TAB_H))
+            .items_center(),
+        // 竖排：占一条和行区域等高的竖带
+        TabPosition::Left => strip
+            .left(px(0.))
+            .top(px(layout::row_top(level)))
+            .w(px(layout::TAB_H))
+            .h(px(viewport))
+            .items_center(),
+        TabPosition::Right => strip
+            .right(px(0.))
+            .top(px(layout::row_top(level)))
+            .w(px(layout::TAB_H))
+            .h(px(viewport))
+            .items_center(),
     };
 
     let mut button = |id: &'static str,
@@ -739,7 +774,7 @@ fn tab_strip(tab_bar: &crate::settings::TabBar, cx: &Context<ColumnView>) -> Any
         let mut element = div()
             .id(ElementId::Name(format!("tab-btn-{id}").into()))
             .occlude()
-            .size(px(20.))
+            .size(px(19.))
             .flex_none()
             .flex()
             .items_center()
@@ -802,8 +837,6 @@ fn tab_strip(tab_bar: &crate::settings::TabBar, cx: &Context<ColumnView>) -> Any
             "icons/star.svg",
             false,
             Box::new(|cx| {
-                // 跳转到收藏列表：收藏项平时被塞在一个隐藏子菜单 `__favorites__` 里
-                // （`sync_favorites` 维护），这里就是把它当普通子菜单展开
                 crate::popup::open_submenu(cx, crate::settings::FAV_ID);
             }),
         ));

@@ -1618,7 +1618,8 @@ fn column_steps(
             };
             // 多列符切出来的列并排在同一张卡片里，每段各按自己的内容算宽
             let widths = layout::column_widths_with(entries, measure);
-            let width = layout::column_span(&widths);
+            // 快捷栏在左侧 / 右侧时占掉一条竖带：窗口要宽这么多
+            let width = layout::column_span(&widths) + layout::tab_side_w(level);
             // 子菜单就贴在**父项自己那一列**的右边缘展开 —— 跟 Windows 自带的
             // 右键菜单一样：名字旁边一格就是子菜单，鼠标往右一挪就进去了。
             //

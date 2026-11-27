@@ -367,21 +367,64 @@ pub fn search_place() -> settings::SearchPlace {
 }
 
 /// 第 `level` 列顶部的额外留白（只有第一列会被搜索框占掉一条）。
+/// 快捷栏（Tab 栏）的厚度：占位模式下它会**吃掉**一条边。
+pub const TAB_H: f32 = 26.0;
+
+/// 快捷栏贴在哪条边（没开 / 不是第一列 → `None`）。
+fn tab_edge(level: usize) -> Option<crate::settings::TabPosition> {
+    if level != 0 {
+        return None;
+    }
+    crate::settings::read(|settings| {
+        if settings.tab_bar.enabled {
+            Some(settings.tab_bar.position)
+        } else {
+            None
+        }
+    })
+}
+
+/// 顶部要多留的厚度（快捷栏在顶部时）。
+pub fn tab_top_h(level: usize) -> f32 {
+    match tab_edge(level) {
+        Some(crate::settings::TabPosition::Top) => TAB_H,
+        _ => 0.0,
+    }
+}
+
+/// 底部要多留的厚度。
+pub fn tab_bottom_h(level: usize) -> f32 {
+    match tab_edge(level) {
+        Some(crate::settings::TabPosition::Bottom) => TAB_H,
+        _ => 0.0,
+    }
+}
+
+/// 左侧 / 右侧要占的宽度。
+pub fn tab_side_w(level: usize) -> f32 {
+    match tab_edge(level) {
+        Some(crate::settings::TabPosition::Left) | Some(crate::settings::TabPosition::Right) => TAB_H,
+        _ => 0.0,
+    }
+}
+
 pub fn header_h(level: usize) -> f32 {
-    if level == 0 && search_place() == settings::SearchPlace::Top {
+    let search = if level == 0 && search_place() == settings::SearchPlace::Top {
         SEARCH_H + SEARCH_GAP
     } else {
         0.0
-    }
+    };
+    search + tab_top_h(level)
 }
 
 /// 第 `level` 列底部的额外留白（搜索框放底部时）。
 pub fn footer_h(level: usize) -> f32 {
-    if level == 0 && search_place() == settings::SearchPlace::Bottom {
+    let search = if level == 0 && search_place() == settings::SearchPlace::Bottom {
         SEARCH_H + SEARCH_GAP
     } else {
         0.0
-    }
+    };
+    search + tab_bottom_h(level)
 }
 
 /// 第 `level` 列里第一行的顶边（相对卡片顶边）。
@@ -401,7 +444,8 @@ pub fn search_top(level: usize) -> Option<f32> {
     }
     match search_place() {
         settings::SearchPlace::Off => None,
-        settings::SearchPlace::Top => Some(chrome() + row_pad() - 2.0),
+        // 快捷栏占了顶部就在它下面
+        settings::SearchPlace::Top => Some(chrome() + row_pad() - 2.0 + tab_top_h(level)),
         settings::SearchPlace::Bottom => None,
     }
 }
@@ -413,7 +457,7 @@ pub fn search_bottom(level: usize) -> Option<f32> {
     }
     match search_place() {
         settings::SearchPlace::Off => None,
-        settings::SearchPlace::Bottom => Some(chrome() + row_pad() - 2.0),
+        settings::SearchPlace::Bottom => Some(chrome() + row_pad() - 2.0 + tab_bottom_h(level)),
         settings::SearchPlace::Top => None,
     }
 }
