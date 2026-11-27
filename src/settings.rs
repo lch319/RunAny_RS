@@ -1393,6 +1393,9 @@ pub struct MenuSettings {
     /// 菜单边上的浮层快捷栏
     #[serde(default)]
     pub tab_bar: TabBar,
+    /// 呼出菜单时不抢前台焦点（重命名文件时按快捷键，输入框不会失焦）
+    #[serde(default)]
+    pub menu_no_focus: bool,
     /// 置顶之后，点菜单项 / 右键仍然保持菜单不收起（连续点几项用）
     #[serde(default = "default_true_pin")]
     pub pin_stays_open: bool,
@@ -2130,6 +2133,7 @@ impl MenuSettings {
             blank_rest_ms: 260,
             selection_wait_rules: default_wait_rules(),
             tab_bar: TabBar::default(),
+            menu_no_focus: false,
             pin_stays_open: true,
             favorites: Vec::new(),
             folder_opener: String::new(),

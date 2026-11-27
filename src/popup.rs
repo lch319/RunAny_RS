@@ -631,13 +631,23 @@ fn open_with(cx: &mut App, source: Source) {
     // 就被拽回屏幕左上角、高度也变回预热那一版 —— 实测每次必现。
     // `cx.activate(true)` + `set_foreground` 已经够了：键盘事件照样进得来
     // （Esc 收一层、↑↓ 换行都是好的）。
-    if let Some(hwnd) = cx
+    // 「不抢焦点」：给菜单窗口加 NOACTIVATE，并且**不**抢前台。
+    // 这样在重命名文件、编辑框里按快捷键，原窗口的焦点不会丢。
+    let no_focus = settings::read(|settings| settings.menu_no_focus);
+    let focus_hwnd = cx
         .global::<MenuHost>()
         .slots
-        .first()
-        .and_then(|slot| slot.hwnd)
-    {
-        win32::set_foreground(hwnd);
+        .iter()
+        .filter(|slot| slot.on_screen)
+        .filter_map(|slot| slot.hwnd)
+        .collect::<Vec<_>>();
+    for hwnd in &focus_hwnd {
+        win32::set_no_activate(*hwnd, no_focus);
+    }
+    if !no_focus {
+        if let Some(hwnd) = focus_hwnd.first().copied() {
+            win32::set_foreground(hwnd);
+        }
     }
     // 收尾再钉一次位置：`set_foreground` 走的是系统消息，GPUI 那边可能还会补一帧
     // 布局（顺带把它记着的原点用上）。两次 SetWindowPos 一两毫秒，比「偶尔弹到
@@ -646,7 +656,7 @@ fn open_with(cx: &mut App, source: Source) {
     timing!(t0, "钉位置完成");
     // 6) 搜索框：每次打开都清空，并把焦点直接给它 ——
     //    用户弹菜单就是为了打字，不该还得先点一下输入框（点不到就等于「输入不了」）。
-    if layout::search_place().enabled() {
+    if layout::search_place().enabled() && !no_focus {
         let input = cx.global::<MenuHost>().search.clone();
         input.update(cx, |input, cx| input.set_text("", cx));
         if let Some(handle) = cx.global::<MenuHost>().slots.first().map(|slot| slot.handle) {

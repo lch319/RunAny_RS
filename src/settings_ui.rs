@@ -2992,6 +2992,18 @@ impl SettingsView {
                         }),
                     ),
                     toggle_row(
+                        "不抢焦点",
+                        "呼出菜单不夺取前台：在重命名文件、编辑框里按快捷键，原来那个光标不会丢；代价是搜索框和上下键用不了，只能用鼠标点",
+                        settings.menu_no_focus,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.menu_no_focus = !settings.menu_no_focus
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
                         "置顶时点了不收起",
                         "钉住状态下点菜单项 / 右键都不关闭，方便连着点几项",
                         settings.pin_stays_open,

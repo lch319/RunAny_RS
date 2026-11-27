@@ -3307,6 +3307,31 @@ fn monitor_areas() -> Vec<(i32, i32, i32, i32)> {
         pids
     }
 
+    /// 给窗口加/去 `WS_EX_NOACTIVATE`：加了之后 `ShowWindow` 不会抢前台。
+    ///
+    /// 「呼出菜单不抢焦点」就靠它 —— 用户正在重命名文件时弹菜单，
+    /// 没有它重命名框会失焦（等于在别处点了一下）。
+    pub fn set_no_activate(hwnd: isize, no_activate: bool) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
+        };
+        const WS_EX_NOACTIVATE: isize = 0x0800_0000;
+        if hwnd == 0 {
+            return;
+        }
+        unsafe {
+            let style = GetWindowLongPtrW(hwnd as HWND, GWL_EXSTYLE);
+            let next = if no_activate {
+                style | WS_EX_NOACTIVATE
+            } else {
+                style & !WS_EX_NOACTIVATE
+            };
+            if next != style {
+                SetWindowLongPtrW(hwnd as HWND, GWL_EXSTYLE, next);
+            }
+        }
+    }
+
     /// 让一扇窗口「暂时不能点」（弹确认框时把设置页冻住）。
     pub fn enable_window(hwnd: isize, enabled: bool) {
         // EnableWindow 这个 feature 没开，自己声明（user32）
@@ -4233,7 +4258,7 @@ pub use imp::{
     foreground_process_name, window_at_cursor, selection_target,
     caps_lock_on, window_rect_exact, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
     process_path_of_window,
-    sibling_processes, open_file_location, open_folder, open_url, enable_window,
+    sibling_processes, open_file_location, open_folder, open_url, enable_window, set_no_activate,
     system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,
     window_scale,
     install_input_hooks, set_key_gate, set_mouse_gate, numlock_on, press_numlock,
