@@ -704,7 +704,7 @@ impl Render for ColumnView {
             let tab_bar = crate::settings::read(|settings| settings.tab_bar.clone());
             // 右键菜单 / 托盘菜单不画快捷栏（它们连搜索框都没有）
             if tab_bar.enabled && crate::layout::is_full_menu() {
-                card = card.child(tab_strip(&tab_bar, viewport, &state, cx));
+                card = card.child(tab_strip(&tab_bar, viewport, &state, self.hwnd, cx));
             }
         }
         card
@@ -718,6 +718,7 @@ fn tab_strip(
     tab_bar: &crate::settings::TabBar,
     viewport: f32,
     state: &Entity<crate::state::MenuState>,
+    hwnd: Option<isize>,
     cx: &Context<ColumnView>,
 ) -> AnyElement {
     use crate::settings::TabPosition;
@@ -731,6 +732,12 @@ fn tab_strip(
     let mut strip = div()
         .id(ElementId::Name("menu-tab-strip".into()))
         .occlude()
+        // 按住快捷栏拖动 = 把菜单挪个位置（和拖标题栏一个味道）
+        .on_mouse_down(gpui::MouseButton::Left, move |_event, _window, _cx| {
+            if let Some(hwnd) = hwnd {
+                crate::win32::start_system_drag(hwnd, crate::win32::HT_CAPTION);
+            }
+        })
         .absolute()
         .flex()
         .gap(px(3.))

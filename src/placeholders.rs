@@ -150,9 +150,20 @@ fn expand_braces(input: &str) -> String {
 /// 单个变量的值；名字不认识返回 `None`（占位符原样保留）。
 pub fn value(name: &str) -> Option<String> {
     let text = match name.trim() {
-        "selection" => selection::current()
-            .map(|selection| selection.placeholder_text())
-            .unwrap_or_default(),
+        "selection" => {
+            // 菜单「置顶」着放了很久、或者是直接按快捷键执行某一项时，
+            // 打开那一刻抓到的内容可能已经没了（或者根本没抓过）。
+            // 这里补一次现场抓取，别让「用指定网址搜选中内容」发出一个空搜索。
+            let current = selection::current();
+            let current = if current.is_none() {
+                selection::capture_quick()
+            } else {
+                current
+            };
+            current
+                .map(|selection| selection.placeholder_text())
+                .unwrap_or_default()
+        }
         "selection_kind" => selection::current()
             .map(|selection| selection.kind_label())
             .unwrap_or_default(),
