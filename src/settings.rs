@@ -1382,7 +1382,10 @@ pub struct MenuSettings {
     #[serde(default = "default_blank_rest_ms")]
     pub blank_rest_ms: u32,
     /// 按程序覆盖「复制后最多等待」。没匹配上的走 `selection_wait_ms`。
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    ///
+    /// 注意**不加** `skip_serializing_if`：用户把这两条默认删掉之后要能真的删掉，
+    /// 序列化成 `[]` 才不会被「缺字段 → 用默认值」又补回来。
+    #[serde(default = "default_wait_rules")]
     pub selection_wait_rules: Vec<SelectionWaitRule>,
     /// 打开文件夹用的命令。留空 = 用资源管理器。
     ///
@@ -2113,7 +2116,7 @@ impl MenuSettings {
             panel_max_width: default_max_panel_width(),
             row_height: 24.0,
             blank_rest_ms: 260,
-            selection_wait_rules: Vec::new(),
+            selection_wait_rules: default_wait_rules(),
             folder_opener: String::new(),
             auto_enabled: true,
             auto_notice: true,
@@ -3502,6 +3505,20 @@ impl MenuSettings {
     pub fn reset_all(&mut self) {
         *self = Self::default();
     }
+}
+
+/// 默认给的按程序等待：两个出了名慢的（写剪贴板要几百毫秒）。
+fn default_wait_rules() -> Vec<SelectionWaitRule> {
+    vec![
+        SelectionWaitRule {
+            process: "dopus.exe".to_string(),
+            wait_ms: 800,
+        },
+        SelectionWaitRule {
+            process: "explorer.exe".to_string(),
+            wait_ms: 500,
+        },
+    ]
 }
 
 /// 「复制后最多等待」的按程序覆盖：某个程序单独给一个等待时长。
