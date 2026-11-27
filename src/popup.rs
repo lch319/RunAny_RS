@@ -388,7 +388,36 @@ pub fn open_path(cx: &mut App, labels: &[String]) {
 }
 
 /// 托盘图标右键：弹托盘菜单（和弹出菜单同一套渲染，菜单项也是同一棵树里的）。
+///
+/// 如果**已经有一个菜单开着**（比如置顶钉住的那个），`open_with` 会直接 return
+/// —— 表现就是「点了托盘右键什么都没发生，像卡住了」。这种情况下原地把内容
+/// 换成托盘菜单（和菜单项右键同一个做法）。
 pub fn open_tray(cx: &mut App) {
+    if cx.global::<MenuHost>().live.is_some() {
+        let entries = crate::settings::tray_menu();
+        if entries.is_empty() {
+            return;
+        }
+        crate::layout::set_full_menu(false);
+        let (cursor_pos, screen, scale) = cursor::anchor(cx);
+        let width = root_width(cx, &entries);
+        let origin = anchor_origin(cursor_pos, screen, width);
+        cx.update_global(|host: &mut MenuHost, _app: &mut App| {
+            if let Some(live) = host.live.as_mut() {
+                live.origin = origin;
+                live.screen = screen;
+                live.scale = scale;
+            }
+            host.grace = Some(std::time::Instant::now());
+        });
+        let state = cx.global::<MenuHost>().state.clone();
+        state.update(cx, |state, cx| {
+            state.replace(entries);
+            cx.notify();
+        });
+        sync(cx);
+        return;
+    }
     open_with(cx, Source::Tray);
 }
 

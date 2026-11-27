@@ -379,7 +379,7 @@ pub fn set_full_menu(full: bool) {
     FULL_MENU.with(|slot| slot.set(full));
 }
 
-fn is_full_menu() -> bool {
+pub fn is_full_menu() -> bool {
     FULL_MENU.with(|slot| slot.get())
 }
 
@@ -417,11 +417,9 @@ pub fn tab_bottom_h(level: usize) -> f32 {
 }
 
 /// 左侧 / 右侧要占的宽度。
-pub fn tab_side_w(level: usize) -> f32 {
-    match tab_edge(level) {
-        Some(crate::settings::TabPosition::Left) | Some(crate::settings::TabPosition::Right) => TAB_H,
-        _ => 0.0,
-    }
+pub fn tab_side_w(_level: usize) -> f32 {
+    // 左右侧已废弃（只支持顶部/底部）
+    0.0
 }
 
 pub fn header_h(level: usize) -> f32 {

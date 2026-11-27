@@ -702,7 +702,8 @@ impl Render for ColumnView {
         // 浮在菜单边上的快捷栏：**不占内容位置**，盖在边缘
         if level == 0 {
             let tab_bar = crate::settings::read(|settings| settings.tab_bar.clone());
-            if tab_bar.enabled {
+            // 右键菜单 / 托盘菜单不画快捷栏（它们连搜索框都没有）
+            if tab_bar.enabled && crate::layout::is_full_menu() {
                 card = card.child(tab_strip(&tab_bar, viewport, &state, cx));
             }
         }
@@ -724,7 +725,8 @@ fn tab_strip(
     let level = 0;
     let pinned = crate::popup::is_pinned(cx);
     let dark = crate::theme::palette().dark;
-    let vertical = matches!(tab_bar.position, TabPosition::Left | TabPosition::Right);
+    // 只支持顶部 / 底部；老配置里存的左右侧按底部处理
+    let vertical = false;
 
     let mut strip = div()
         .id(ElementId::Name("menu-tab-strip".into()))
@@ -752,18 +754,12 @@ fn tab_strip(
             .right(px(0.))
             .h(px(layout::TAB_H))
             .items_center(),
-        // 竖排：占一条和行区域等高的竖带
-        TabPosition::Left => strip
+        // 左右侧已废弃：老配置一律当底部，免得菜单里留一条竖带
+        TabPosition::Left | TabPosition::Right => strip
+            .bottom(px(0.))
             .left(px(0.))
-            .top(px(layout::row_top(level)))
-            .w(px(layout::TAB_H))
-            .h(px(viewport))
-            .items_center(),
-        TabPosition::Right => strip
             .right(px(0.))
-            .top(px(layout::row_top(level)))
-            .w(px(layout::TAB_H))
-            .h(px(viewport))
+            .h(px(layout::TAB_H))
             .items_center(),
     };
 

@@ -2937,21 +2937,18 @@ impl SettingsView {
                     ),
                     row_with_control(
                         "位置",
-                        "顶 / 底 / 左 / 右，贴着菜单边",
+                        "贴在菜单的上边或下边，占一条 26px 的带子",
                         segmented(
                             "tab-bar-position",
-                            &[(0, "顶部"), (1, "底部"), (2, "左侧"), (3, "右侧")],
+                            &[(0, "顶部"), (1, "底部")],
                             match settings.tab_bar.position {
                                 settings::TabPosition::Top => 0,
-                                settings::TabPosition::Bottom => 1,
-                                settings::TabPosition::Left => 2,
-                                settings::TabPosition::Right => 3,
+                                // 左右侧已废弃：老的配置显示成「底部」
+                                _ => 1,
                             },
                             cx.listener(|_this, value: &u32, window, cx| {
                                 let position = match *value {
                                     0 => settings::TabPosition::Top,
-                                    2 => settings::TabPosition::Left,
-                                    3 => settings::TabPosition::Right,
                                     _ => settings::TabPosition::Bottom,
                                 };
                                 settings::update(cx, |settings| {

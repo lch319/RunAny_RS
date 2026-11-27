@@ -106,6 +106,8 @@ impl MenuState {
         self.revision = settings::revision();
         // 重新弹菜单时搜索框是空的，但状态里可能还留着上一轮搜过的词
         self.query.clear();
+        // 「只看收藏」同理：新弹一次就回到全部，否则图标会莫名其妙亮着
+        self.favorites_only = false;
         self.reset();
     }
 
