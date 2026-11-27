@@ -367,12 +367,28 @@ pub fn search_place() -> settings::SearchPlace {
 }
 
 /// 第 `level` 列顶部的额外留白（只有第一列会被搜索框占掉一条）。
+thread_local! {
+    /// 当前这个弹出窗口是不是「正经菜单」。
+    ///
+    /// 右键某一项、托盘右键、第二问这些也是弹出窗口，但**不该**带搜索框和快捷栏
+    static FULL_MENU: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// 标记当前弹出窗口的种类（`open_with` 里按 `Source` 设）。
+pub fn set_full_menu(full: bool) {
+    FULL_MENU.with(|slot| slot.set(full));
+}
+
+fn is_full_menu() -> bool {
+    FULL_MENU.with(|slot| slot.get())
+}
+
 /// 快捷栏（Tab 栏）的厚度：占位模式下它会**吃掉**一条边。
 pub const TAB_H: f32 = 26.0;
 
 /// 快捷栏贴在哪条边（没开 / 不是第一列 → `None`）。
 fn tab_edge(level: usize) -> Option<crate::settings::TabPosition> {
-    if level != 0 {
+    if level != 0 || !is_full_menu() {
         return None;
     }
     crate::settings::read(|settings| {
@@ -439,7 +455,7 @@ pub fn row_bottom_edge(level: usize) -> f32 {
 
 /// 搜索框在第 `level` 列里的 y（相对卡片顶边）；没开搜索框就是 None。
 pub fn search_top(level: usize) -> Option<f32> {
-    if level != 0 {
+    if level != 0 || !is_full_menu() {
         return None;
     }
     match search_place() {
@@ -452,7 +468,7 @@ pub fn search_top(level: usize) -> Option<f32> {
 
 /// 搜索框底边到卡片底边的距离（放底部时用）。
 pub fn search_bottom(level: usize) -> Option<f32> {
-    if level != 0 {
+    if level != 0 || !is_full_menu() {
         return None;
     }
     match search_place() {

@@ -417,6 +417,8 @@ pub fn open_item_context(cx: &mut App, id: &str) {
             // 给一段宽限期（和刚弹出时同一套机制），这段时间内的失焦/点击不算数。
             host.grace = Some(std::time::Instant::now());
         });
+        // 原地换成「右键菜单」的内容：它不该带搜索框和快捷栏
+        crate::layout::set_full_menu(false);
         let state = cx.global::<MenuHost>().state.clone();
         state.update(cx, |state, cx| {
             state.replace(entries);
@@ -432,6 +434,12 @@ fn open_with(cx: &mut App, source: Source) {
     if cx.global::<MenuHost>().live.is_some() {
         return;
     }
+    // 只有「完整菜单 / 单支子菜单」带搜索框和快捷栏；
+    // 右键某一项、托盘右键、第二问都是小窗，不该有那两条
+    crate::layout::set_full_menu(matches!(
+        source,
+        Source::All { .. } | Source::Submenu(_)
+    ));
     let t0 = std::time::Instant::now();
     // 「跟随系统」模式下，每次弹出前问一次系统明暗
     settings::set_system_dark(matches!(
@@ -813,7 +821,11 @@ pub fn finish(id: SharedString, label: SharedString, actions: Vec<ActionStep>, c
         state.hits += 1;
         cx.notify();
     });
-    close_all(cx);
+    // 置顶 + 「点了也不收」：连续点几项时菜单不该每点一次就消失
+    let stay_open = is_pinned(cx) && crate::settings::read(|settings| settings.pin_stays_open);
+    if !stay_open {
+        close_all(cx);
+    }
     let append = crate::settings::appends_selection(&id);
     run_actions(actions, append, None, false, cx);
 }

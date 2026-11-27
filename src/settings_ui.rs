@@ -2995,6 +2995,18 @@ impl SettingsView {
                         }),
                     ),
                     toggle_row(
+                        "置顶时点了不收起",
+                        "钉住状态下点菜单项 / 右键都不关闭，方便连着点几项",
+                        settings.pin_stays_open,
+                        cx.listener(|_this, _: &ClickEvent, window, cx| {
+                            settings::update(cx, |settings| {
+                                settings.pin_stays_open = !settings.pin_stays_open
+                            });
+                            window.refresh();
+                            cx.notify();
+                        }),
+                    ),
+                    toggle_row(
                         "打开设置",
                         "从菜单直接跳设置页",
                         settings.tab_bar.settings,

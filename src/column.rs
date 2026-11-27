@@ -703,7 +703,7 @@ impl Render for ColumnView {
         if level == 0 {
             let tab_bar = crate::settings::read(|settings| settings.tab_bar.clone());
             if tab_bar.enabled {
-                card = card.child(tab_strip(&tab_bar, viewport, cx));
+                card = card.child(tab_strip(&tab_bar, viewport, &state, cx));
             }
         }
         card
@@ -716,6 +716,7 @@ impl Render for ColumnView {
 fn tab_strip(
     tab_bar: &crate::settings::TabBar,
     viewport: f32,
+    state: &Entity<crate::state::MenuState>,
     cx: &Context<ColumnView>,
 ) -> AnyElement {
     use crate::settings::TabPosition;
@@ -832,12 +833,25 @@ fn tab_strip(
         ));
     }
     if tab_bar.favorites {
+        let showing_favorites = state.read(cx).favorites_only();
         strip = strip.child(button(
             "tab-favorite",
             "icons/star.svg",
-            false,
-            Box::new(|cx| {
-                crate::popup::open_submenu(cx, crate::settings::FAV_ID);
+            showing_favorites,
+            Box::new({
+                let state = state.clone();
+                move |cx| {
+                    // 和搜索框一个思路：在整棵菜单里筛，只留收藏的那些
+                    let changed = state.update(cx, |state, cx| {
+                        let next = !state.favorites_only();
+                        let changed = state.set_favorites_only(next);
+                        cx.notify();
+                        changed
+                    });
+                    if changed {
+                        crate::popup::sync(cx);
+                    }
+                }
             }),
         ));
     }

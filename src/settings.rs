@@ -1393,6 +1393,9 @@ pub struct MenuSettings {
     /// 菜单边上的浮层快捷栏
     #[serde(default)]
     pub tab_bar: TabBar,
+    /// 置顶之后，点菜单项 / 右键仍然保持菜单不收起（连续点几项用）
+    #[serde(default = "default_true_pin")]
+    pub pin_stays_open: bool,
     /// 收藏的菜单项 id（菜单里会像「最近运行」一样浮到顶部）
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub favorites: Vec<String>,
@@ -2127,6 +2130,7 @@ impl MenuSettings {
             blank_rest_ms: 260,
             selection_wait_rules: default_wait_rules(),
             tab_bar: TabBar::default(),
+            pin_stays_open: true,
             favorites: Vec::new(),
             folder_opener: String::new(),
             auto_enabled: true,
@@ -3600,6 +3604,10 @@ pub struct TabBar {
 }
 
 fn yes() -> bool {
+    true
+}
+
+fn default_true_pin() -> bool {
     true
 }
 

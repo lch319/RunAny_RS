@@ -14,6 +14,8 @@ pub struct MenuState {
     base: Vec<MenuEntry>,
     /// 搜索框里的词（空串 = 没在搜）
     query: String,
+    /// 只看收藏（快捷栏的 ⭐ 切换，跟搜索一样是「在整棵树里筛」）
+    favorites_only: bool,
     /// 从根到「当前高亮项」的索引路径；`path.len()` == 应显示的列数
     pub path: Vec<usize>,
     /// 每一列的行区域滚动偏移（像素），长度与 `path` 一致
@@ -28,6 +30,7 @@ impl MenuState {
             menu: menu.clone(),
             base: menu,
             query: String::new(),
+            favorites_only: false,
             path: vec![0],
             scroll: vec![0.0],
             revision: settings::revision(),
@@ -54,10 +57,28 @@ impl MenuState {
         true
     }
 
+    /// 现在是不是「只看收藏」。
+    pub fn favorites_only(&self) -> bool {
+        self.favorites_only
+    }
+
+    /// 切到「只看收藏 / 看全部」（⭐ 用）。
+    pub fn set_favorites_only(&mut self, on: bool) -> bool {
+        if self.favorites_only == on {
+            return false;
+        }
+        self.favorites_only = on;
+        self.apply_query();
+        true
+    }
+
     /// 按当前 `query` 重算 `menu`（`base` 不动）。
     fn apply_query(&mut self) {
         let needle = self.query.trim().to_lowercase();
-        if needle.is_empty() {
+        if self.favorites_only {
+            let favorites = settings::read(|settings| settings.favorites.clone());
+            self.menu = filter_favorites(&self.base, &favorites);
+        } else if needle.is_empty() {
             self.menu = self.base.clone();
         } else {
             self.menu = filter_entries(&self.base, &needle);
@@ -475,6 +496,30 @@ pub fn sample_menu_ex(filter: bool, show_all: bool) -> Vec<MenuEntry> {
             items
         }
     }
+}
+
+/// 只留收藏的项：整支子菜单被收藏时连子孙一起留；某个子孙被收藏时留着这层壳。
+fn filter_favorites(entries: &[MenuEntry], favorites: &[String]) -> Vec<MenuEntry> {
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let item = entry.item()?;
+            let id = item.id.to_string();
+            if favorites.iter().any(|fav| *fav == id) {
+                return Some(entry.clone());
+            }
+            if item.children.is_empty() {
+                return None;
+            }
+            let kept = filter_favorites(&item.children, favorites);
+            if kept.is_empty() {
+                return None;
+            }
+            let mut copy = item.clone();
+            copy.children = kept;
+            Some(MenuEntry::Item(copy))
+        })
+        .collect()
 }
 
 /// 按搜索词剪一棵菜单树（和「设置 → 菜单项」页那套搜索同一套规则：
