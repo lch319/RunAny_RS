@@ -2228,6 +2228,11 @@ fn create_slot(
         .into_iter()
         .find(|candidate| !before.contains(candidate));
     if let Some(hwnd) = hwnd {
+        // 窗口一建好就按「不抢焦点」定样式：等它第一次 ShowWindow 之后再设就晚了，
+        // 展开子菜单那一下已经把前台抢走（用户报的就是这个）
+        if settings::read(|settings| settings.menu_no_focus) {
+            win32::set_no_activate(hwnd, true);
+        }
         handle
             .update(cx, |view, _window, cx| {
                 view.attach_window(hwnd);

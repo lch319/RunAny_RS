@@ -737,10 +737,29 @@ fn tab_strip(
             let Some(hwnd) = hwnd else {
                 return;
             };
-            // 系统拖动是阻塞的：回到这里时窗口已经被挪走了
             crate::win32::start_system_drag(hwnd, crate::win32::HT_CAPTION);
-            // 把「菜单原点」校正到新位置，否则子菜单还按老原点展开（用户报的错位）
-            crate::popup::rebase_origin(hwnd, cx);
+            // `start_system_drag` 是 PostMessage，**立刻返回**（窗口还没动）。
+            // 所以不能马上读位置 —— 那样拿到的还是旧坐标。这里轮询等它停下来
+            // （连续两次位置一样 = 停稳了），再把原点校正过去。
+            let task = cx.spawn(async move |cx| {
+                let mut last: Option<(i32, i32)> = None;
+                for _ in 0..40 {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(90))
+                        .await;
+                    let Some(now) = crate::win32::client_origin(hwnd) else {
+                        return;
+                    };
+                    if last == Some(now) {
+                        let _ = cx.update(|cx| crate::popup::rebase_origin(hwnd, cx));
+                        return;
+                    }
+                    last = Some(now);
+                }
+                let _ = cx.update(|cx| crate::popup::rebase_origin(hwnd, cx));
+            });
+            // 任务(detach)自己跑完，不需要保存句柄
+            task.detach();
         })
         .absolute()
         .flex()

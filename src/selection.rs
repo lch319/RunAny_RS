@@ -805,12 +805,10 @@ fn capture_trying(attempts: usize) -> Option<Rc<Selection>> {
             foreground, target
         );
     }
-    // 桌面上不可能有选中内容：整条抓取链路（等修饰键 → 发复制键 → 等剪贴板）
-    // 全是白等，直接返回，菜单立刻就能弹。
-    if win32::is_desktop_window(foreground) {
-        clear();
-        return None;
-    }
+    // 桌面上**也能**有选中内容（选中桌面图标再按快捷键很常见）。
+    // 以前这里直接返回，所以「在桌面选中文件呼出菜单」永远抓不到 ——
+    // 现在照常发复制键：桌面的 DefView 自己就处理 Ctrl+C。
+    // 代价是空桌面上要等满一次预算（默认 120ms），可以接受。
     // 根本没有前台窗口（刚开机、锁屏回来、当前会话没有可见窗口）：没有地方能「选中
     // 东西」，发复制键也没人接 —— 整条链路只会白等。直接放行，菜单立刻弹。
     if foreground == 0 || target == 0 {
