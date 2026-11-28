@@ -229,13 +229,34 @@ fn ensure_window(cx: &mut App, scale: f32) -> bool {
 }
 
 /// 显示（或者用新内容刷新）提示卡片；`lines` 空 = 收起来。
+thread_local! {
+    /// 紧凑模式：只有一行短文字（快捷栏的悬停提示），
+    /// 不要最小宽度、也不要那堆留白，并且摆在光标**上面**
+    static COMPACT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// 快捷栏那种「只有一个词」的悬停提示：贴光标上方、宽度只裹住文字。
+pub fn show_tip(cx: &mut App, text: &str) {
+    COMPACT.with(|slot| slot.set(true));
+    show(
+        cx,
+        vec![HintLine {
+            text: text.to_string(),
+            dim: false,
+            id: String::new(),
+        }],
+    );
+    COMPACT.with(|slot| slot.set(false));
+}
+
 pub fn show(cx: &mut App, lines: Vec<HintLine>) {
     if lines.is_empty() {
         hide();
         return;
     }
+    let compact = COMPACT.with(|slot| slot.get());
     let cfg = settings::hotstring_settings();
-    if !cfg.enabled || cfg.hide_hint {
+    if !compact && (!cfg.enabled || cfg.hide_hint) {
         hide();
         return;
     }
@@ -249,7 +270,11 @@ pub fn show(cx: &mut App, lines: Vec<HintLine>) {
     });
     let Some(handle) = handle else { return };
 
-    let width = estimate_width(&lines);
+    let width = if compact {
+        estimate_width_compact(&lines)
+    } else {
+        estimate_width(&lines)
+    };
     let height = PAD * 2.0
         + lines
             .iter()
@@ -281,6 +306,11 @@ pub fn show(cx: &mut App, lines: Vec<HintLine>) {
     }
     let mut x = base_x + cfg.hint_x as f32;
     let mut y = base_y + cfg.hint_y as f32;
+    if compact {
+        // 贴在光标（这里是按钮）上方，居中一点
+        x = base_x + 10.0 - width / 2.0;
+        y = base_y - height - 10.0;
+    }
     let left = f32::from(screen.origin.x) + 4.0;
     let top = f32::from(screen.origin.y) + 4.0;
     let right = f32::from(screen.origin.x) + f32::from(screen.size.width) - width - 4.0;
@@ -414,6 +444,19 @@ pub fn hide() {
 }
 
 /// 卡片要多宽：按最长那行的字符估（中文一个字宽，ASCII 半个）。
+/// 紧凑版：宽度就是文字宽度 + 内边距，不套 `MIN_W`（否则短词会留一大块空白）。
+fn estimate_width_compact(lines: &[HintLine]) -> f32 {
+    let mut widest: f32 = 0.0;
+    for line in lines {
+        let mut width = 0.0;
+        for ch in line.text.chars() {
+            width += if ch.is_ascii() { 6.6 } else { 12.0 };
+        }
+        widest = widest.max(width);
+    }
+    (widest + PAD * 2.0 + 4.0).max(28.0)
+}
+
 fn estimate_width(lines: &[HintLine]) -> f32 {
     let mut widest: f32 = 0.0;
     for line in lines {

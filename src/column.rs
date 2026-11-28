@@ -828,14 +828,7 @@ fn tab_strip(
             .h(px(19.))
             .on_hover(cx.listener(move |_this, over: &bool, _window, cx| {
                 if *over {
-                    crate::hint::show(
-                        cx,
-                        vec![crate::hotstring::HintLine {
-                            text: crate::i18n::t(tip).to_string(),
-                            dim: false,
-                            id: String::new(),
-                        }],
-                    );
+                    crate::hint::show_tip(cx, crate::i18n::t(tip));
                 } else {
                     crate::hint::hide();
                 }

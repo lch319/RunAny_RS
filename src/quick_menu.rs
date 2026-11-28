@@ -177,6 +177,10 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
                     crate::popup::set_frozen(false);
                     return;
                 }
+                // 主菜单每次 sync 都会把自己 SetWindowPos 到 TOPMOST 最前，
+                // 会把右键小窗压下去。这里定期把它抬回来（很便宜）。
+                let _ = crate::win32::set_topmost(hwnd, "on");
+                crate::win32::bring_to_front(hwnd);
                 let now = crate::win32::click_tick();
                 if now != clicks {
                     if !crate::win32::cursor_over_hwnd(hwnd) {
@@ -257,7 +261,7 @@ impl Render for QuickMenu {
             .rounded(px(8.));
 
         for (index, item) in items.into_iter().enumerate() {
-            let hovered = HOVER.with(|slot| slot.get()) == index;
+
             let badge = item.badge.clone();
             let id = item.id.clone();
             let label = item.label.clone();
@@ -274,11 +278,8 @@ impl Render for QuickMenu {
                     .cursor_pointer()
                     .text_size(px(12.))
                     .text_color(theme::text_primary())
-                    .when(hovered, |style| style.bg(theme::row_selected()))
-                    .on_hover(cx.listener(move |_this, hovered: &bool, _window, cx| {
-                        HOVER.with(|slot| slot.set(if *hovered { index } else { usize::MAX }));
-                        cx.notify();
-                    }))
+                    // 纯样式悬停：这是 NOACTIVATE 窗口，靠状态 + notify 会闪
+                    .hover(|style| style.bg(theme::row_selected()))
                     .on_click(cx.listener(move |_this, _: &gpui::ClickEvent, _window, cx| {
                         // 两件事都必须**推迟到本帧结束**再做：
                         // 在窗口自己的点击回调里直接 remove_window / 改设置，GPUI 会
