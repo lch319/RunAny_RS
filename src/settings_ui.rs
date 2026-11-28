@@ -129,6 +129,11 @@ pub fn open(cx: &mut App) {
     open_at(cx, None);
 }
 
+/// 调试用：直接打开到某一页。
+pub fn open_page(cx: &mut App, page: Option<&str>) {
+    open_at(cx, page);
+}
+
 /// 打开设置窗口、并直接落到某一页（「打开关于」这个内置动作用）。
 pub fn open_about(cx: &mut App) {
     open_at(cx, Some("about"));
@@ -2528,28 +2533,7 @@ impl Render for SettingsView {
                             .min_h_0()
                             .flex()
                             .flex_col()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(3.))
-                                    .px(px(18.))
-                                    .pt(px(14.))
-                                    .pb(px(10.))
-                                    .child(
-                                        div()
-                                            .text_size(px(17.))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(theme::text_primary())
-                                            .child(page.title()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_size(px(11.5))
-                                            .text_color(theme::ui_text_tertiary())
-                                            .child(page.subtitle()),
-                                    ),
-                            )
+                            .pt(px(6.))
                             .child(
                                 div()
                                     .flex_1()
@@ -2917,11 +2901,11 @@ impl SettingsView {
         let pinned = popup::is_pinned(cx);
         let preview = section(
             "预览",
-            "菜单出现在鼠标位置；开着「保持显示」时点别的窗口也不会收起，方便边调边看",
+            "",
             vec![
             section(
                 "配色",
-                "点色块即时预览；＋ 打开颜色面板（点色块 / 手填实时预览，按「确定」才算数，点外面取消）。「边框」是菜单卡片那一圈描边，不要就在「尺寸」里把「显示边框」关掉",
+                "点色块即时预览",
                 vec![
                     mode_row,
                     div()
@@ -2940,7 +2924,7 @@ impl SettingsView {
                 {
                     let mut rows: Vec<AnyElement> = vec![row_with_control(
                         "列宽方式",
-                        "「固定」所有列一样宽；「按内容」每一列各自按最长的菜单项算（不超过最大列宽），子菜单不会因为名字短而空一大块",
+                        "固定 = 一样宽；按内容 = 各按最长的项算",
                         segmented(
                             "panel-width-mode",
                             &width_mode_options(),
@@ -2963,7 +2947,7 @@ impl SettingsView {
                     )];
                     rows.push(row_with_control(
                         "子菜单展开",
-                        "「贴名字」子菜单紧挨着父项那一列的边缘，第一行尽量和父项那一行齐平；下方放不下就整张往上挪，绝不切成半截（默认，手感最像原版）；「贴卡片」从整张卡片右边出来，不压任何一列，但离父项远",
+                        "贴名字 = 挨着父项那列；贴卡片 = 从整张卡片右边出来",
                         segmented(
                             "submenu-anchor",
                             &submenu_anchor_options(),
@@ -3067,7 +3051,7 @@ impl SettingsView {
             ),
             section(
                 "透明度",
-                "整个菜单一起变淡（文字、图标、边框都跟着），不是只改底色",
+                "整个菜单一起变淡（文字、图标、边框都跟着）",
                 vec![self.slider(
                     "opacity",
                     "不透明度",
@@ -3187,7 +3171,7 @@ impl SettingsView {
             ),
             section(
                 "菜单快捷栏（浮层）",
-                "浮在菜单边上，不占菜单内容的位置；每个按钮都能单独关掉",
+                "浮在菜单边上，不占菜单内容的位置",
                 vec![
                     toggle_row(
                         "显示快捷栏",
@@ -3294,75 +3278,15 @@ impl SettingsView {
                         }),
                     ),
                 ],
-            ),div()
-                .px(px(9.))
-                .py(px(6.))
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .child(primary_button(
-                    if menu_open {
-                        "关闭菜单"
-                    } else {
-                        "打开菜单试试"
-                    },
-                    cx.listener(|_this, _: &ClickEvent, _window, cx| {
-                        popup::toggle(cx);
-                    }),
-                ))
-                // 保持显示：开着的时候 watchdog 不再因为失焦收起菜单
-                .child(
-                    div()
-                        .id("pin-menu-hold")
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .px(px(8.))
-                        .py(px(3.))
-                        .rounded(px(theme::RADIUS_ROW))
-                        .cursor_pointer()
-                        .hover(|style| style.bg(theme::surface_hover()))
-                        .on_click(cx.listener(|_this, _: &ClickEvent, window, cx| {
-                            let next = !popup::is_pinned(cx);
-                            popup::set_pinned(next, cx);
-                            window.refresh();
-                            cx.notify();
-                        }))
-                        .child(
-                            div()
-                                .text_size(px(11.5))
-                                .text_color(theme::text_primary())
-                                .child(crate::i18n::t("保持显示")),
-                        )
-                        .child(switch(pinned)),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .truncate()
-                        .text_size(px(10.5))
-                        .text_color(theme::ui_text_tertiary())
-                        .child(if crate::i18n::is_english() {
-                            format!(
-                                "Hotkey {} pops up in any app",
-                                settings.popup_hotkey.trim()
-                            )
-                        } else {
-                            format!(
-                                "快捷键 {} 在任何应用里都能唤出",
-                                settings.popup_hotkey.trim()
-                            )
-                        }),
-                )
-                .into_any_element()],
-        );
+            ),
+        ],
+        );;
 
         vec![
             preview,
             section(
                 "主题配色",
-                "点一下整套换掉（浅色 / 深色各一份，跟随系统时两个模式都好看）；下面还能继续细调",
+                "点一下整套换掉",
                 vec![div()
                     .px(px(6.))
                     .pb(px(4.))
@@ -3446,7 +3370,7 @@ impl SettingsView {
                 rows.push(self.tip_editor(settings, cx));
                 section(
                     "悬停提示",
-                    "只是「看一眼」用的，不影响点击；关掉就完全不弹",
+                    "只是「看一眼」用的，不影响点击",
                     rows,
                 )
             },
@@ -3886,7 +3810,7 @@ impl SettingsView {
 
         section(
             "禁用应用",
-            "这些程序的窗口在前面时，快捷键和热字符串提示全部让路；托盘图标手动点开面板照旧可用",
+            "这些程序的窗口在前面时",
             {
                 let mut all: Vec<AnyElement> = vec![toggle_row(
                     "启用「禁用应用」名单",
@@ -4287,7 +4211,7 @@ impl SettingsView {
 
         let browser = section(
             "动作库",
-            "搜一搜、点「添加到菜单」就能用；带参数的动作（音量、亮度、剪贴板变形…）会先填好默认值，参数在 菜单项 → 动作 里改",
+            "搜一搜、点「添加到菜单」就能用",
             vec![
                 search,
                 chips.into_any_element(),
@@ -4436,7 +4360,7 @@ impl SettingsView {
 
         let interpreters = section(
             "脚本解释器",
-            "「运行脚本」动作用的解释器。放进 Plugins\\ahkv1 / ahkv2 就自动认；.ahk 也放这儿，菜单里只写文件名就行",
+            "「运行脚本」动作用的解释器。放进 Plugi…",
             interpreter_rows,
         );
 
@@ -5025,7 +4949,7 @@ impl SettingsView {
             ),
             section(
                 "托盘右键菜单",
-                "和「菜单项」页一模一样：搜索、筛选、拖动排序、增删改；改完右键托盘图标就能看到",
+                "和「菜单项」页一模一样：搜索、筛选、拖动排序…",
                 vec![self.tray_tree.clone().into_any_element()],
             ),
         ]
@@ -5049,7 +4973,7 @@ impl SettingsView {
         vec![
             section(
                 "打开文件夹",
-                "留空就用资源管理器。填了就用它打开：占位符 {path} 会换成那个文件夹的路径",
+                "留空就用资源管理器。填了就用它打开：占位符 …",
                 vec![row_with_control(
                     "用指定程序打开文件夹",
                     "所有「打开文件夹 / 打开文件所在位置 / 建好并打开」都走这里。例：dopusrt.exe /acmd go \"path={path}\"",
@@ -5183,7 +5107,7 @@ impl SettingsView {
             ),
             section(
                 "最近运行",
-                "把刚用过的几项提到菜单顶部 / 底部；完整菜单和筛过的菜单里都生效",
+                "把刚用过的几项提到菜单顶部 / 底部",
                 vec![
                     toggle_row(
                         "启用最近运行",
@@ -5301,7 +5225,7 @@ impl SettingsView {
         let page = vec![
             section(
                 "选中内容",
-                "选中文字后按热键：先向原窗口发一次复制键把选中内容抓过来，抓完立刻把剪贴板原样还原",
+                "选中文字后按热键：先向原窗口发一次复制键把选…",
                 vec![
                     toggle_row(
                         "弹出前抓取选中内容",
@@ -5510,7 +5434,7 @@ impl SettingsView {
             ),
             section(
                 "按选中内容切换菜单",
-                "给菜单项标上「适用选中内容」，弹出时按抓到的类型只显示用得上的那些",
+                "给菜单项标上「适用选中内容」",
                 vec![
                     toggle_row(
                         "按选中内容筛选菜单",
@@ -5604,7 +5528,7 @@ impl SettingsView {
             ),
             section(
                 "「显示全部菜单」入口",
-                "只要这次弹的不是完整菜单，就补一条入口，点它原地换成完整菜单",
+                "只要这次弹的不是完整菜单",
                 vec![
                     toggle_row(
                         "不是完整菜单就补一条",
@@ -5650,7 +5574,7 @@ impl SettingsView {
             ),
             section(
                 "占位符",
-                "动作参数里写 {名字}，点菜单项执行时才替换成实际值",
+                "动作参数里写 {名字}",
                 vars,
             ),
         ];
@@ -6359,12 +6283,12 @@ impl SettingsView {
         vec![
             section(
                 "一键直达",
-                "选中内容 + 一个快捷键，按规则表逐条问，命中就直接跑",
+                "选中内容 + 一个快捷键",
                 basic_rows,
             ),
             section(
                 "规则表（从上往下）",
-                "顺序就是优先级；按住任意一行上下拖可以调整顺序（↑ ↓ 也行）；每行第二行就是这条规则跑的那个直达项",
+                "顺序就是优先级",
                 vec![div()
                     .flex()
                     .flex_col()
@@ -7295,12 +7219,12 @@ impl SettingsView {
         vec![
             section(
                 "程序索引",
-                "扫 PATH、Program Files、LocalAppData\\Programs，给每个可执行文件记下它的完整路径",
+                "扫 PATH、Program Files、L…",
                 vec![status_row.into_any_element()],
             ),
             section(
                 "怎么挑",
-                "同一个文件名在磁盘上有好几份时，按这里的规则选一份；认哪些后缀也在这里定",
+                "同一个文件名在磁盘上有好几份时",
                 vec![
                     prefer_row.into_any_element(),
                     prefer_hint.into_any_element(),
@@ -7310,7 +7234,7 @@ impl SettingsView {
             ),
             section(
                 "Everything 联动",
-                "本地索引里没有的名字，交给 Everything 在全盘查完整路径",
+                "本地索引里没有的名字",
                 vec![
                     everything_row.into_any_element(),
                     ev_path_row.into_any_element(),
@@ -7740,7 +7664,7 @@ impl SettingsView {
         vec![
             section(
                 "菜单里用到的文件名",
-                "只写了名字的动作，执行时会解析成完整路径；不对就点「选文件」挑一个，同名会先全部列出来",
+                "只写了名字的动作，执行时会解析成完整路径",
                 vec![
                     toolbar.into_any_element(),
                     list.into_any_element(),
@@ -8370,7 +8294,7 @@ impl SettingsView {
         vec![
             section(
                 "热字符串",
-                "在任何程序里敲一串字 → 执行绑定的菜单项（和「点击」「快捷键」并列的第三种触发方式）",
+                "在任何程序里敲一串字 → 执行绑定的菜单项",
                 vec![
                     toggle_row(
                         "启用热字符串",
@@ -8425,7 +8349,7 @@ impl SettingsView {
             ),
             section(
                 "提示",
-                "敲到第几个字符冒出来、长什么样、停多久、多透明、贴在哪儿",
+                "敲到第几个字符冒出来、长什么样、停多久、多透…",
                 hint_rows,
             ),
         ]
@@ -8584,7 +8508,7 @@ impl SettingsView {
         vec![
             section(
                 "关于",
-                "RunAny_RS · MIT · Rust + GPUI",
+                "RunAny_RS · MIT · Rust…",
                 vec![
                     repo_row,
                     info_row("版本", env!("CARGO_PKG_VERSION")),
@@ -8651,7 +8575,7 @@ impl SettingsView {
         vec![
             section(
                 "当前配置",
-                "换一份菜单配置只是预览，点「应用 / 确定」才写盘",
+                "换一份菜单配置只是预览",
                 vec![
                     info_row(
                         "设置文件",
@@ -8697,7 +8621,7 @@ impl SettingsView {
             ),
             section(
                 "从 RunAny 导入",
-                "读原版 RunAny.ini：菜单项 / 子菜单 / 分隔线 / 快捷键 / 动作类型一一对应，单独存成一份新配置",
+                "读原版 RunAny.ini：菜单项 / 子…",
                 vec![div()
                     .px(px(9.))
                     .py(px(4.))
@@ -8968,7 +8892,7 @@ impl SettingsView {
 
         section(
             "配置备份",
-            "换电脑 / 手滑删了菜单，都能一键回到某一刻",
+            "换电脑 / 手滑删了菜单",
             rows,
         )
     }

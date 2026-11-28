@@ -712,6 +712,11 @@ pub fn capture_quick() -> Option<Rc<Selection>> {
 }
 
 fn capture_trying(attempts: usize) -> Option<Rc<Selection>> {
+    // 单元测试里**绝对不能**真的去抓：那会往测试控制台发 Ctrl+C、还要读剪贴板，
+    // 轻则污染测试输出，重则直接 ACCESS_VIOLATION（0xc0000005）。
+    if cfg!(test) {
+        return None;
+    }
     // 同一次触发里别重复发复制键：快捷键路径先抓了一次（没抓到），
     // 紧接着 `execute_step` 又要追加选中内容——不拦一下就会再发一次。
     // 800ms 内只认第一次的结果（抓到就沿用，没抓到就认了）。

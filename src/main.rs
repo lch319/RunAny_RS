@@ -318,8 +318,10 @@ fn main() {
 
         // 调试用：`GPUI_MENU_DEBUG_SETTINGS=1` 直接把设置窗口摆出来
         // （这台机器上模拟点击不可靠，看版式时省得手动点）
-        if std::env::var_os("GPUI_MENU_DEBUG_SETTINGS").is_some() {
-            settings_ui::open(cx);
+        if let Some(page) = std::env::var_os("GPUI_MENU_DEBUG_SETTINGS") {
+            // `=1` 打开常规页；`=appearance` 这类值直接落到对应页（截图核对版式用）
+            let page = page.to_string_lossy().to_string();
+            settings_ui::open_page(cx, if page == "1" { None } else { Some(&page) });
         }
         // 调试用：`GPUI_MENU_DEBUG_EDITOR=<条目 id>` 直接摆出编辑窗口
         if let Some(id) = std::env::var("GPUI_MENU_DEBUG_EDITOR")
