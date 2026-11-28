@@ -3359,7 +3359,6 @@ impl SettingsView {
         );
 
         vec![
-            preview,
             section(
                 "主题配色",
                 "点一下整套换掉（浅色 / 深色各一份，跟随系统时两个模式都好看）；下面还能继续细调",
@@ -3380,6 +3379,7 @@ impl SettingsView {
                     )
                     .into_any_element()],
             ),
+            preview,
             // 悬停提示：鼠标在菜单项上停一会儿，弹一张小卡片说明它是什么
             {
                 let tip = settings.tooltip.clone();

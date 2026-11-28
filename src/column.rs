@@ -828,7 +828,8 @@ fn tab_strip(
             .h(px(19.))
             .on_hover(cx.listener(move |_this, over: &bool, _window, cx| {
                 if *over {
-                    crate::hint::show_tip(cx, crate::i18n::t(tip));
+                    // 停够 400ms 才弹，鼠标扫过去不该闪一下提示
+                    crate::hint::show_tip_delayed(cx, crate::i18n::t(tip), 400);
                 } else {
                     crate::hint::hide();
                 }

@@ -235,6 +235,28 @@ thread_local! {
     static COMPACT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+thread_local! {
+    /// 悬停提示的「这一轮」代号：鼠标一移开就 +1，没排到队的旧任务自然作废
+    static TIP_TICKET: std::sync::atomic::AtomicU64 = const { std::sync::atomic::AtomicU64::new(0) };
+}
+
+/// 带延迟的悬停提示（鼠标停够 `delay_ms` 才弹，中途移开就不弹）。
+pub fn show_tip_delayed(cx: &mut App, text: &str, delay_ms: u64) {
+    let ticket = TIP_TICKET.with(|slot| slot.fetch_add(1, std::sync::atomic::Ordering::SeqCst)) + 1;
+    let text = text.to_string();
+    cx.spawn(async move |cx| {
+        cx.background_executor()
+            .timer(std::time::Duration::from_millis(delay_ms))
+            .await;
+        // 这期间光标已经移开了（ticket 变了）：不弹
+        if TIP_TICKET.with(|slot| slot.load(std::sync::atomic::Ordering::SeqCst)) != ticket {
+            return;
+        }
+        let _ = cx.update(|cx| show_tip(cx, &text));
+    })
+    .detach();
+}
+
 /// 快捷栏那种「只有一个词」的悬停提示：贴光标上方、宽度只裹住文字。
 pub fn show_tip(cx: &mut App, text: &str) {
     COMPACT.with(|slot| slot.set(true));
@@ -431,6 +453,8 @@ fn arm_timer_for(cx: &mut App, ms: u64) {
 
 /// 把提示收起来（设置改了 / 热字符串停了 / 超时）。
 pub fn hide() {
+    // 作废还没弹出来的悬停提示
+    TIP_TICKET.with(|slot| slot.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
     HOVERED.with(|flag| flag.set(false));
     HOST.with(|host| {
         let mut host = host.borrow_mut();
