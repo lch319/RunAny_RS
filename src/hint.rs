@@ -309,13 +309,18 @@ pub fn show(cx: &mut App, lines: Vec<HintLine>) {
     // 位置 = 鼠标（或文字插入点）+ 设置里的偏移；出屏幕就夹回来
     let (cursor_pos, screen, anchor_scale) = crate::cursor::anchor(cx);
     let caret = caret_point(anchor_scale.max(0.01));
-    let (base_x, base_y) = match cfg.anchor {
-        settings::HintAnchor::Caret => match caret {
-            // 光标有位置就贴它；目标程序报不出来（控制台等）就退回鼠标
-            Some((x, y)) => (x, y),
-            None => (f32::from(cursor_pos.x), f32::from(cursor_pos.y)),
-        },
-        settings::HintAnchor::Cursor => (f32::from(cursor_pos.x), f32::from(cursor_pos.y)),
+    let (base_x, base_y) = if compact {
+        // 快捷栏的悬停提示：锚点永远是**鼠标**（不是文字插入点那个工字标）
+        (f32::from(cursor_pos.x), f32::from(cursor_pos.y))
+    } else {
+        match cfg.anchor {
+            settings::HintAnchor::Caret => match caret {
+                // 光标有位置就贴它；目标程序报不出来（控制台等）就退回鼠标
+                Some((x, y)) => (x, y),
+                None => (f32::from(cursor_pos.x), f32::from(cursor_pos.y)),
+            },
+            settings::HintAnchor::Cursor => (f32::from(cursor_pos.x), f32::from(cursor_pos.y)),
+        }
     };
     if std::env::var_os("GPUI_MENU_DEBUG_HINT").is_some() {
         eprintln!(
