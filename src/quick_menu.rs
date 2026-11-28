@@ -29,6 +29,8 @@ thread_local! {
     static HOVER: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
     /// 这次弹出用的尺寸（渲染时要照着画，否则 GPUI 会按内容重算，宽度对不上）
     static SIZE: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((220.0, 120.0)) };
+    /// 本窗口的 HWND：刚创建时可能还查不到，轮询里会再补
+    static HWND: std::cell::Cell<isize> = const { std::cell::Cell::new(0) };
     static WINDOW: std::cell::Cell<Option<gpui::AnyWindowHandle>> = const { std::cell::Cell::new(None) };
 }
 
@@ -118,6 +120,7 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
         .into_iter()
         .find(|candidate| !before.contains(candidate));
     if let Some(hwnd) = hwnd {
+        HWND.with(|slot| slot.set(hwnd));
         if crate::settings::read(|settings| settings.menu_no_focus) {
             crate::win32::set_no_activate(hwnd, true);
         }
@@ -135,10 +138,21 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
         // 圆角裁剪区域：这里再补一次（按客户区尺寸认出自己那扇窗，
         // 开窗那一刻拿到的句柄有时还没量出尺寸，设了也不生效）
         let want = (width as i32, height as i32);
-        for hwnd in crate::win32::zed_window_handles() {
-            if crate::win32::client_size(hwnd) == Some(want) {
-                crate::win32::set_rounded_corners(hwnd, scale);
+        let mut mine = HWND.with(|slot| slot.get());
+        if mine == 0 {
+            // 按客户区尺寸认出自己那扇窗（开窗那一刻的差集有时是空的）
+            mine = crate::win32::zed_window_handles()
+                .into_iter()
+                .find(|hwnd| crate::win32::client_size(*hwnd) == Some(want))
+                .unwrap_or(0);
+            if mine != 0 {
+                HWND.with(|slot| slot.set(mine));
             }
+        }
+        if mine != 0 {
+            crate::win32::set_rounded_corners(mine, scale);
+            let _ = crate::win32::set_topmost(mine, "on");
+            crate::win32::bring_to_front(mine);
         }
         // 先把基线等稳：右键那一下的点击计数会在这几十毫秒里变，
         // 立刻开始判「点外面」就会把它当成用户点走了（表现为「一闪就关」）
@@ -152,9 +166,13 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
                 .await;
             let now = crate::win32::click_tick();
             if now != clicks {
-                let outside = match hwnd {
-                    Some(hwnd) => !crate::win32::cursor_over_hwnd(hwnd),
-                    None => !crate::win32::cursor_over_self(),
+                // 判「点外面」只认**本窗**：主菜单（置顶那个）也在我们的窗口里，
+                // 用它来判断的话，点主菜单空白处就永远关不掉右键菜单
+                let mine = HWND.with(|slot| slot.get());
+                let outside = if mine != 0 {
+                    !crate::win32::cursor_over_hwnd(mine)
+                } else {
+                    !crate::win32::cursor_over_self()
                 };
                 if outside {
                     let _ = cx.update(|cx| close(cx));

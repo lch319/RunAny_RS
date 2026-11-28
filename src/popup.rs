@@ -410,29 +410,15 @@ pub fn open_path(cx: &mut App, labels: &[String]) {
 /// —— 表现就是「点了托盘右键什么都没发生，像卡住了」。这种情况下原地把内容
 /// 换成托盘菜单（和菜单项右键同一个做法）。
 pub fn open_tray(cx: &mut App) {
+    // 主菜单还开着（多半是置顶的那个）：托盘菜单也**另开一扇小窗**。
+    // 以前是「原地换内容」，结果置顶菜单被顶掉、而且托盘菜单继承了置顶状态
+    // ——点它外面都不关。
     if cx.global::<MenuHost>().live.is_some() {
         let entries = crate::settings::tray_menu();
         if entries.is_empty() {
             return;
         }
-        crate::layout::set_full_menu(false);
-        let (cursor_pos, screen, scale) = cursor::anchor(cx);
-        let width = root_width(cx, &entries);
-        let origin = anchor_origin(cursor_pos, screen, width);
-        cx.update_global(|host: &mut MenuHost, _app: &mut App| {
-            if let Some(live) = host.live.as_mut() {
-                live.origin = origin;
-                live.screen = screen;
-                live.scale = scale;
-            }
-            host.grace = Some(std::time::Instant::now());
-        });
-        let state = cx.global::<MenuHost>().state.clone();
-        state.update(cx, |state, cx| {
-            state.replace(entries);
-            cx.notify();
-        });
-        sync(cx);
+        crate::quick_menu::open(entries, cx);
         return;
     }
     open_with(cx, Source::Tray);
@@ -447,36 +433,11 @@ pub fn open_item_context(cx: &mut App, id: &str) {
     if entries.is_empty() {
         return;
     }
-    // 主菜单是**置顶**着的：另开一扇小窗显示右键菜单。
-    // 不能沿用「换掉主菜单内容」那套 —— 那等于把置顶菜单顶掉了。
-    if cx.global::<MenuHost>().live.is_some() && is_pinned(cx) {
-        crate::quick_menu::open(entries, cx);
-        return;
-    }
+    // 只要主菜单还开着，右键菜单就**另开一扇小窗**，不管置不置顶。
+    // 以前是「把主菜单内容换掉」：置顶时等于把主菜单顶掉，没置顶也会让用户
+    // 丢掉刚刚的菜单。现在两扇窗各活各的。
     if cx.global::<MenuHost>().live.is_some() {
-        let (cursor_pos, screen, scale) = cursor::anchor(cx);
-        let width = root_width(cx, &entries);
-        let origin = anchor_origin(cursor_pos, screen, width);
-        cx.update_global(|host: &mut MenuHost, _app: &mut App| {
-            if let Some(live) = host.live.as_mut() {
-                live.origin = origin;
-                live.screen = screen;
-                live.scale = scale;
-            }
-            // 右键换菜单是一次「窗口原地重建」：位置刚挪、内容刚换，
-            // watchdog 那 60ms 一轮的检查会看到「刚点了一下、光标好像不在窗口上」，
-            // 直接判成「用户点走了」把菜单收掉 —— 用户看到的是一闪而过。
-            // 给一段宽限期（和刚弹出时同一套机制），这段时间内的失焦/点击不算数。
-            host.grace = Some(std::time::Instant::now());
-        });
-        // 原地换成「右键菜单」的内容：它不该带搜索框和快捷栏
-        crate::layout::set_full_menu(false);
-        let state = cx.global::<MenuHost>().state.clone();
-        state.update(cx, |state, cx| {
-            state.replace(entries);
-            cx.notify();
-        });
-        sync(cx);
+        crate::quick_menu::open(entries, cx);
         return;
     }
     open_with(cx, Source::ItemContext(id.to_string()));
@@ -1500,6 +1461,8 @@ pub fn show_all_now(cx: &mut App) {
 }
 
 pub fn close_all(cx: &mut App) {
+    // 主菜单收了，挂在它上面的点右键小窗也要一起收（否则会孤零零留在屏幕上）
+    crate::quick_menu::close(cx);
     // 悬停提示跟着菜单一起收（它是独立窗口，不收就一直挂在那儿）
     crate::tooltip::hide_now();
     let Some(live) = cx.global_mut::<MenuHost>().live.take() else {
