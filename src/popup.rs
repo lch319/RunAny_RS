@@ -654,6 +654,21 @@ fn open_with(cx: &mut App, source: Source) {
     // 屏幕左上角」强。
     reassert_positions(cx);
     timing!(t0, "钉位置完成");
+    // 打开之后再「对一次账」。
+    //
+    // 为什么要无条件来一次：字体度量在**第一帧之前**可能还没就绪，`column_steps`
+    // 量出来的文字偏窄 → 卡片偏窄 → 长名字被截断；而行高也会因为字体回退里的
+    // 行距差异算出不一样的高度 → 底部被切。这都是一次性的，等几十毫秒就正常。
+    // 以前只有「这一轮动过尺寸」才延后对账，宽度算错（尺寸没变）那种情况就漏了，
+    // 表现正是用户说的「偶尔菜单显示不完整」。
+    cx.spawn(async move |cx| {
+        cx.background_executor()
+            .timer(Duration::from_millis(60))
+            .await;
+        // 不要 steal_focus：这次只是补尺寸，别去动前台
+        let _ = cx.update(|app| sync_with(app, false));
+    })
+    .detach();
     // 6) 搜索框：每次打开都清空，并把焦点直接给它 ——
     //    用户弹菜单就是为了打字，不该还得先点一下输入框（点不到就等于「输入不了」）。
     if layout::search_place().enabled() && !no_focus {
