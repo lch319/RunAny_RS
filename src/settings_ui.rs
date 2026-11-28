@@ -2899,10 +2899,12 @@ impl SettingsView {
         // 预览放在最上面：调外观时最常用的就是「开着菜单改一下、看一眼」
         let menu_open = popup::is_open(cx);
         let pinned = popup::is_pinned(cx);
-        let preview = section(
-            "预览",
-            "",
-            vec![
+        let preview = div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            .children(vec![
             section(
                 "配色",
                 "点色块即时预览",
@@ -3279,11 +3281,10 @@ impl SettingsView {
                     ),
                 ],
             ),
-        ],
-        );;
+        ])
+        .into_any_element();
 
         vec![
-            preview,
             section(
                 "主题配色",
                 "点一下整套换掉",
@@ -3304,6 +3305,7 @@ impl SettingsView {
                     )
                     .into_any_element()],
             ),
+            preview,
             // 悬停提示：鼠标在菜单项上停一会儿，弹一张小卡片说明它是什么
             {
                 let tip = settings.tooltip.clone();
