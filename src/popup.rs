@@ -1492,7 +1492,21 @@ pub fn close_all(cx: &mut App) {
     // 用 `bring_to_front` 而不是只 `set_foreground`：菜单是 TOPMOST、又抢过前台，
     // 光交还前台不一定能把那个窗口从别的程序下面捞出来（点「打开菜单试试」之后
     // 设置窗口跑到别的窗口底下，就是这个原因）。
-    if live.previous_foreground != 0 {
+    // 只有当「前台还停在我们自己的窗口上」时才把焦点还回去。
+    //
+    // 用户反馈的坑：在记事本里打开菜单 → 置顶 → 切到别的窗口 → 取消置顶 →
+    // 点菜单外面关掉 → **记事本被捞到最前面**。因为这里的 previous_foreground
+    // 还是记事本，无条件 bring_to_front 就等于把它从用户正看着的窗口后面拽出来。
+    let ours: Vec<isize> = cx
+        .global::<MenuHost>()
+        .slots
+        .iter()
+        .filter(|slot| slot.on_screen)
+        .filter_map(|slot| slot.hwnd)
+        .collect();
+    let foreground = win32::foreground_window();
+    let still_ours = foreground == 0 || ours.contains(&foreground);
+    if still_ours && live.previous_foreground != 0 {
         win32::bring_to_front(live.previous_foreground);
     }
     drop(live); // _keys 随之解绑
