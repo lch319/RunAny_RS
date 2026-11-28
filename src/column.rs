@@ -278,6 +278,9 @@ impl ColumnView {
     /// 点父项只展开；点叶子执行完就关菜单。
     fn click(&mut self, idx: usize, cx: &mut Context<Self>) {
         if crate::popup::is_frozen() {
+            // 冻住的时候点主菜单，视同「点到右键菜单外面」：把它关掉
+            crate::quick_menu::close_raw();
+            cx.notify();
             return;
         }
         let state = self.state.clone();
@@ -296,6 +299,8 @@ impl ColumnView {
     /// 右键某一项：弹「编辑 / 隐藏 / 删除」这几条快捷操作。
     fn context(&mut self, idx: usize, cx: &mut Context<Self>) {
         if crate::popup::is_frozen() {
+            crate::quick_menu::close_raw();
+            cx.notify();
             return;
         }
         let id = self
@@ -818,19 +823,22 @@ fn tab_strip(
         let mut element = div()
             .id(ElementId::Name(format!("tab-btn-{id}").into()))
             .occlude()
-            .when(hovered, |style| style.px(px(4.)))
-            .when(!hovered, |style| style.w(px(19.)))
+
+            .w(px(19.))
             .h(px(19.))
             .on_hover(cx.listener(move |_this, over: &bool, _window, cx| {
-                TAB_HOVER.with(|slot| {
-                    let mut current = slot.borrow_mut();
-                    if *over {
-                        *current = id.to_string();
-                    } else if current.as_str() == id {
-                        current.clear();
-                    }
-                });
-                cx.notify();
+                if *over {
+                    crate::hint::show(
+                        cx,
+                        vec![crate::hotstring::HintLine {
+                            text: crate::i18n::t(tip).to_string(),
+                            dim: false,
+                            id: String::new(),
+                        }],
+                    );
+                } else {
+                    crate::hint::hide();
+                }
             }))
             .flex_none()
             .flex()
@@ -851,17 +859,7 @@ fn tab_strip(
                         theme::ui_text_secondary()
                     }),
             )
-            // 悬停时把名字显示出来（快捷栏只有图标，认不出来很正常）
-            .when(hovered, |style| {
-                style.child(
-                    div()
-                        .pl(px(4.))
-                        .pr(px(2.))
-                        .text_size(px(10.))
-                        .text_color(theme::text_primary())
-                        .child(crate::i18n::t(tip)),
-                )
-            });
+            ;
         element = element.on_click(cx.listener(move |_this, _: &gpui::ClickEvent, window, cx| {
             cx.stop_propagation();
             on_click(cx);

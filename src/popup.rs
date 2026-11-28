@@ -875,7 +875,9 @@ pub fn finish(id: SharedString, label: SharedString, actions: Vec<ActionStep>, c
 /// 普通项走 `finish`（和主菜单点一下完全一样）。
 pub fn run_entry(id: SharedString, label: SharedString, cx: &mut App) {
     if let Some(rest) = id.strip_prefix("__ctx:") {
-        close_all(cx);
+        // 只关小窗；主菜单（可能置顶着）留着。以前这里 close_all，
+        // 于是「点加入收藏」顺手把主菜单关了
+        crate::quick_menu::close_raw();
         run_context_action(rest, cx);
         return;
     }
@@ -1820,8 +1822,11 @@ fn sync_with(cx: &mut App, steal_focus: bool) {
                 .rev()
                 .find(|slot| slot.on_screen)
                 .and_then(|slot| slot.hwnd);
+            // 不抢焦点模式：新露一列也不许抢前台
             if let Some(next) = next {
-                win32::set_foreground(next);
+                if !settings::read(|settings| settings.menu_no_focus) {
+                    win32::set_foreground(next);
+                }
             }
         }
 
@@ -2544,6 +2549,11 @@ fn typed_char(key: &str) -> Option<char> {
 /// `sync()` 里已经尽量在藏之前交棒；这里再兜一次底：只要前台不在菜单里，
 /// 就把它拉回还开着的最上面那一列。
 fn keep_focus_inside(cx: &mut App) {
+    // 「不抢焦点」模式：这条函数的存在意义就是把前台拉回菜单，
+    // 和用户的需求正好相反 —— 展开子菜单时就这样把前台抢走了。直接不做。
+    if settings::read(|settings| settings.menu_no_focus) {
+        return;
+    }
     let (foreground, ours, top) = {
         let Some(host) = cx.try_global::<MenuHost>() else {
             return;
