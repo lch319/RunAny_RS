@@ -163,6 +163,10 @@ impl ColumnView {
     const HOVER_REST_FAR: Duration = Duration::from_millis(70);
 
     fn hover(&mut self, idx: usize, cx: &mut Context<Self>) {
+        // 右键小窗开着：主菜单冻住，不许悬停展开子菜单
+        if crate::popup::is_frozen() {
+            return;
+        }
         // **任何一次**行悬停都作废「空白处收起」的待办。
         //
         // 之前只在 `apply_hover` 里作废，可是指针在同一行里挪动时 `hover()` 会
@@ -273,6 +277,9 @@ impl ColumnView {
 
     /// 点父项只展开；点叶子执行完就关菜单。
     fn click(&mut self, idx: usize, cx: &mut Context<Self>) {
+        if crate::popup::is_frozen() {
+            return;
+        }
         let state = self.state.clone();
         let level = self.level;
         let fired = state.update(cx, |state, cx| {
@@ -288,6 +295,9 @@ impl ColumnView {
 
     /// 右键某一项：弹「编辑 / 隐藏 / 删除」这几条快捷操作。
     fn context(&mut self, idx: usize, cx: &mut Context<Self>) {
+        if crate::popup::is_frozen() {
+            return;
+        }
         let id = self
             .state
             .read(cx)

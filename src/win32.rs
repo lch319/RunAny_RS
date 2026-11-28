@@ -2884,6 +2884,29 @@ mod imp {
         }
     }
 
+    /// 这扇窗口还活着吗（句柄可能已经被 GPUI 释放，不能盲用它）。
+    pub fn window_alive(hwnd: isize) -> bool {
+        use windows_sys::Win32::UI::WindowsAndMessaging::IsWindow;
+        if hwnd == 0 {
+            return false;
+        }
+        unsafe { IsWindow(hwnd as HWND) != 0 }
+    }
+
+    /// 发一条 `WM_CLOSE`：让窗口背后的框架自己走关闭流程。
+    ///
+    /// 比 `DestroyWindow` 安全得多 —— 直接销毁会让 GPUI 那边还记着一个死句柄，
+    /// 之后任何一次「刷新所有窗口」都会崩（`RefCell already borrowed`）。
+    pub fn post_close(hwnd: isize) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
+        if hwnd == 0 {
+            return;
+        }
+        unsafe {
+            PostMessageW(hwnd as HWND, WM_CLOSE, 0, 0);
+        }
+    }
+
     /// 直接销毁一扇窗口（`remove_window` 失败时的兜底，免得留下关不掉的窗口）。
     pub fn destroy_window(hwnd: isize) {
         use windows_sys::Win32::UI::WindowsAndMessaging::DestroyWindow;
@@ -4319,7 +4342,7 @@ pub use imp::{
     watch_foreground, window_process_id,
     process_name_of_window, input_context, preview_context, context_of_window,
     foreground_process_name, window_at_cursor, selection_target,
-    caps_lock_on, window_rect_exact, client_origin, cursor_over_hwnd, hwnd_of, destroy_window, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
+    caps_lock_on, window_rect_exact, client_origin, cursor_over_hwnd, hwnd_of, destroy_window, window_alive, post_close, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
     process_path_of_window,
     sibling_processes, open_file_location, open_folder, open_url, enable_window, set_no_activate,
     system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,

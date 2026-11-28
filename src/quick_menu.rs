@@ -24,13 +24,24 @@ use crate::theme;
 const ROW_H: f32 = 26.0;
 const PAD: f32 = 6.0;
 
+/// 本窗口的 HWND。用原子而不是 thread_local：轮询跑在独立线程上，
+/// thread_local 在别的线程里读到的是自己那份空的（之前就栽在这上面）。
+static HWND: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+
+fn hwnd_get() -> isize {
+    HWND.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+fn hwnd_set(value: isize) {
+    HWND.store(value, std::sync::atomic::Ordering::Relaxed);
+}
+
 thread_local! {
     static ENTRIES: RefCell<Vec<MenuItem>> = const { RefCell::new(Vec::new()) };
     static HOVER: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) };
     /// 这次弹出用的尺寸（渲染时要照着画，否则 GPUI 会按内容重算，宽度对不上）
     static SIZE: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((220.0, 120.0)) };
-    /// 本窗口的 HWND：刚创建时可能还查不到，轮询里会再补
-    static HWND: std::cell::Cell<isize> = const { std::cell::Cell::new(0) };
+
     static WINDOW: std::cell::Cell<Option<gpui::AnyWindowHandle>> = const { std::cell::Cell::new(None) };
 }
 
@@ -68,6 +79,8 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
         .fold(0.0_f32, f32::max);
     let width = widest.clamp(180.0, 360.0).ceil();
 
+    // 主菜单先冻住：右键菜单开着的时候它不该还能点、还能展开子菜单
+    crate::popup::set_frozen(true);
     ENTRIES.with(|slot| *slot.borrow_mut() = items);
     SIZE.with(|slot| slot.set((width, height)));
     HOVER.with(|slot| slot.set(usize::MAX));
@@ -120,7 +133,7 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
         .into_iter()
         .find(|candidate| !before.contains(candidate));
     if let Some(hwnd) = hwnd {
-        HWND.with(|slot| slot.set(hwnd));
+        hwnd_set(hwnd);
         if crate::settings::read(|settings| settings.menu_no_focus) {
             crate::win32::set_no_activate(hwnd, true);
         }
@@ -133,68 +146,65 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
         let _ = crate::win32::set_topmost(hwnd, "on");
     }
 
-    // 点自己外面就关：这个窗口不抢前台，所以只能靠「鼠标点了几次 + 光标在哪」判断
-    let task = cx.spawn(async move |cx| {
-        // 先等这一下点击过去（右键那一刻的 click_tick 变化不能被当成「点走了」）
-        cx.background_executor()
-            .timer(std::time::Duration::from_millis(220))
-            .await;
-        // 现在窗口肯定已经画过一帧了：render 里会把 HWND 填进来
-        let mut mine = HWND.with(|slot| slot.get());
-        if mine == 0 {
-            let want = ((width * scale).round() as i32, (height * scale).round() as i32);
-            mine = crate::win32::zed_window_handles()
-                .into_iter()
-                .find(|hwnd| {
-                    crate::win32::client_size(*hwnd).is_some_and(|(w, h)| {
-                        (w - want.0).abs() <= 3 && (h - want.1).abs() <= 3
-                    })
-                })
-                .unwrap_or(0);
-            if mine != 0 {
-                HWND.with(|slot| slot.set(mine));
+    // 点自己外面就关：用**独立线程**轮询，全程不碰 App。
+    //
+    // 以前用 `cx.spawn` + `cx.update`：GPUI 的 executor 是在 App 借用期间被 poll 的，
+    // 任务里再 `cx.update` 就是重入借用 → `RefCell already borrowed` 直接崩
+    // （用户报的「点条目闪退」就是这个）。
+    {
+        // HWND 在 render 里才拿得到：这里先起线程，等它出现
+        let _ = hwnd;
+        std::thread::spawn(move || {
+            // 等 render 把 HWND 填进来（最多 3 秒）
+            let mut hwnd = 0;
+            for _ in 0..60 {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                hwnd = hwnd_get();
+                if hwnd != 0 {
+                    break;
+                }
             }
-        }
-        if mine == 0 {
-            // 认不出自己那扇窗就没法判断「点外面」——留着只会变成关不掉的幽灵窗
-            eprintln!("[quick] 认不出自己的窗口，直接关掉");
-            let _ = cx.update(|cx| close(cx));
-            return;
-        }
-        {
-            crate::win32::set_rounded_corners(mine, scale);
-            let _ = crate::win32::set_topmost(mine, "on");
-            crate::win32::bring_to_front(mine);
-        }
-        let mut clicks = crate::win32::click_tick();
-        loop {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(60))
-                .await;
-            let now = crate::win32::click_tick();
-            if now != clicks {
-                // 判「点外面」只认**本窗**：主菜单（置顶那个）也在我们的窗口里，
-                // 用它来判断的话，点主菜单空白处就永远关不掉右键菜单
-                let mine = HWND.with(|slot| slot.get());
-                let outside = if mine != 0 {
-                    !crate::win32::cursor_over_hwnd(mine)
-                } else {
-                    !crate::win32::cursor_over_self()
-                };
-                if outside {
-                    let _ = cx.update(|cx| close(cx));
+            if hwnd == 0 {
+                eprintln!("[quick] 一直没拿到自己的 HWND，放弃监视");
+                return;
+            }
+            // 前 220ms 不算：右键那一下的点击计数不能当成「点走了」
+            std::thread::sleep(std::time::Duration::from_millis(220));
+            let mut clicks = crate::win32::click_tick();
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(60));
+                if !crate::win32::window_alive(hwnd) {
+                    crate::popup::set_frozen(false);
                     return;
                 }
-                clicks = now;
+                let now = crate::win32::click_tick();
+                if now != clicks {
+                    if !crate::win32::cursor_over_hwnd(hwnd) {
+                        crate::quick_menu::close_raw();
+                        return;
+                    }
+                    clicks = now;
+                }
             }
-        }
-    });
-    task.detach();
+        });
+    }
+}
+
+/// 关掉（不碰 App：任何线程都能调）。
+pub fn close_raw() {
+    crate::popup::set_frozen(false);
+    let hwnd = hwnd_get();
+    hwnd_set(0);
+    WINDOW.with(|slot| slot.replace(None));
+    if hwnd != 0 && crate::win32::window_alive(hwnd) {
+        // 交给窗口自己关（GPUI 收 WM_CLOSE 会走它自己的清理）
+        crate::win32::post_close(hwnd);
+    }
 }
 
 /// 把右键小窗重新抬到最前（主菜单展开子菜单时会被盖住）。
 pub fn raise_if_open() {
-    let hwnd = HWND.with(|slot| slot.get());
+    let hwnd = hwnd_get();
     if hwnd != 0 {
         let _ = crate::win32::set_topmost(hwnd, "on");
         crate::win32::bring_to_front(hwnd);
@@ -203,21 +213,8 @@ pub fn raise_if_open() {
 
 /// 关掉（如果开着）。
 pub fn close(cx: &mut App) {
-    let handle = WINDOW.with(|slot| slot.replace(None));
-    let hwnd = HWND.with(|slot| slot.replace(0));
-    if let Some(handle) = handle {
-        let removed = handle
-            .update(cx, |_view, window, _cx| window.remove_window())
-            .is_ok();
-        if removed {
-            return;
-        }
-    }
-    // gpui 那边已经拉不动了（句柄过期/窗口被别的路径建过）：直接按 HWND 销毁，
-    // 否则就留下一个「怎么点都关不掉」的窗口（用户报的就是这个）
-    if hwnd != 0 {
-        crate::win32::destroy_window(hwnd);
-    }
+    let _ = cx;
+    close_raw();
 }
 
 pub struct QuickMenu;
@@ -234,8 +231,8 @@ impl Render for QuickMenu {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // HWND 直接从窗口对象拿（稳定），顺便把圆角 / 置顶 / 前台一次做完
         if let Some(hwnd) = crate::win32::hwnd_of(window) {
-            if HWND.with(|slot| slot.get()) != hwnd {
-                HWND.with(|slot| slot.set(hwnd));
+            if hwnd_get() != hwnd {
+                hwnd_set(hwnd);
                 let scale = window.scale_factor();
                 crate::win32::set_rounded_corners(hwnd, scale);
                 if crate::settings::read(|settings| settings.menu_no_focus) {
@@ -283,24 +280,16 @@ impl Render for QuickMenu {
                         cx.notify();
                     }))
                     .on_click(cx.listener(move |_this, _: &gpui::ClickEvent, _window, cx| {
-                        // 先关窗、**下一帧再执行命令**：在窗口自己的点击回调里
-                        // 把窗口销毁掉、紧接着又去开编辑器/跑动作，GPUI 会直接崩
-                        // （用户报的「点条目就闪退」）
+                        // 两件事都必须**推迟到本帧结束**再做：
+                        // 在窗口自己的点击回调里直接 remove_window / 改设置，GPUI 会
+                        // 报 `RefCell already borrowed`（这就是「点条目闪退」的真因）。
+                        // 先关窗，再执行命令（defer 按顺序跑）。
                         let id = id.clone();
                         let label = label_for_click.clone();
-                        close(cx);
+                        // 两件事都丢到本帧之后：先关窗，再执行命令
+                        cx.defer(|_cx| crate::quick_menu::close_raw());
                         cx.defer(move |cx| crate::popup::run_entry(id, label, cx));
                     }))
-                    .when_some(badge, |row, badge| {
-                        row.child(
-                            div()
-                                .w(px(14.))
-                                .flex_none()
-                                .text_size(px(11.))
-                                .text_color(theme::ui_text_tertiary())
-                                .child(badge),
-                        )
-                    })
                     .child(label),
             );
         }

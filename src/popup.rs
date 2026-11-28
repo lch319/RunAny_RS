@@ -154,6 +154,22 @@ pub fn menu_scale(cx: &App) -> f32 {
         .unwrap_or(1.0)
 }
 
+/// 主菜单是否被「冻住」：右键小窗开着的时候，主菜单不许点、不许展开子菜单。
+///
+/// 用原子而不是 thread_local：关窗的轮询跑在**独立线程**上（不能碰 App），
+/// 那条线程也要能解冻。
+static FROZEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 冻住 / 解冻主菜单（右键小窗开着时用）。
+pub fn set_frozen(frozen: bool) {
+    FROZEN.store(frozen, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 主菜单现在是不是被冻住的。
+pub fn is_frozen() -> bool {
+    FROZEN.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn is_pinned(cx: &App) -> bool {
     cx.try_global::<MenuHost>()
         .map(|host| host.is_pinned())
@@ -1016,8 +1032,7 @@ fn run_context_action(rest: &str, cx: &mut App) {
         "fav" => {
             // 加入 / 取消收藏（右键菜单里的「★ / ☆」）
             crate::settings::toggle_favorite(cx, id);
-            // 菜单内容要重算才有意义（收藏是「下次打开」的列表），先收起来
-            crate::popup::close_all(cx);
+            // **不要** close_all：右键小窗自己会关，主菜单（可能是置顶的）要留着
         }
         "addselfull" => add_selection_items(id, true, cx),
         "addselbare" => add_selection_items(id, false, cx),
