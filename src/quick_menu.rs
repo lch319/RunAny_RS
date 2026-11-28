@@ -192,6 +192,15 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
     task.detach();
 }
 
+/// 把右键小窗重新抬到最前（主菜单展开子菜单时会被盖住）。
+pub fn raise_if_open() {
+    let hwnd = HWND.with(|slot| slot.get());
+    if hwnd != 0 {
+        let _ = crate::win32::set_topmost(hwnd, "on");
+        crate::win32::bring_to_front(hwnd);
+    }
+}
+
 /// 关掉（如果开着）。
 pub fn close(cx: &mut App) {
     let handle = WINDOW.with(|slot| slot.replace(None));
@@ -274,8 +283,13 @@ impl Render for QuickMenu {
                         cx.notify();
                     }))
                     .on_click(cx.listener(move |_this, _: &gpui::ClickEvent, _window, cx| {
+                        // 先关窗、**下一帧再执行命令**：在窗口自己的点击回调里
+                        // 把窗口销毁掉、紧接着又去开编辑器/跑动作，GPUI 会直接崩
+                        // （用户报的「点条目就闪退」）
+                        let id = id.clone();
+                        let label = label_for_click.clone();
                         close(cx);
-                        crate::popup::run_entry(id.clone(), label_for_click.clone(), cx);
+                        cx.defer(move |cx| crate::popup::run_entry(id, label, cx));
                     }))
                     .when_some(badge, |row, badge| {
                         row.child(

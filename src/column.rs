@@ -714,6 +714,11 @@ impl Render for ColumnView {
 /// 菜单边缘那条浮层快捷栏（置顶 / 明暗 / 设置 / 收藏）。
 ///
 /// 全部 `.occlude()`：不挡住的话，点按钮会同时命中底下那一行，直接执行菜单项。
+thread_local! {
+    /// 快捷栏上鼠标停在哪个按钮（用来弹名字）
+    static TAB_HOVER: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
 fn tab_strip(
     tab_bar: &crate::settings::TabBar,
     viewport: f32,
@@ -795,13 +800,28 @@ fn tab_strip(
 
     let mut button = |id: &'static str,
                       icon: &'static str,
+                      tip: &'static str,
                       active: bool,
                       on_click: Box<dyn Fn(&mut gpui::App)>|
      -> AnyElement {
+        let hovered = TAB_HOVER.with(|slot| slot.borrow().as_str() == id);
         let mut element = div()
             .id(ElementId::Name(format!("tab-btn-{id}").into()))
             .occlude()
-            .size(px(19.))
+            .when(hovered, |style| style.px(px(4.)))
+            .when(!hovered, |style| style.w(px(19.)))
+            .h(px(19.))
+            .on_hover(cx.listener(move |_this, over: &bool, _window, cx| {
+                TAB_HOVER.with(|slot| {
+                    let mut current = slot.borrow_mut();
+                    if *over {
+                        *current = id.to_string();
+                    } else if current.as_str() == id {
+                        current.clear();
+                    }
+                });
+                cx.notify();
+            }))
             .flex_none()
             .flex()
             .items_center()
@@ -820,7 +840,18 @@ fn tab_strip(
                     } else {
                         theme::ui_text_secondary()
                     }),
-            );
+            )
+            // 悬停时把名字显示出来（快捷栏只有图标，认不出来很正常）
+            .when(hovered, |style| {
+                style.child(
+                    div()
+                        .pl(px(4.))
+                        .pr(px(2.))
+                        .text_size(px(10.))
+                        .text_color(theme::text_primary())
+                        .child(crate::i18n::t(tip)),
+                )
+            });
         element = element.on_click(cx.listener(move |_this, _: &gpui::ClickEvent, window, cx| {
             cx.stop_propagation();
             on_click(cx);
@@ -834,6 +865,7 @@ fn tab_strip(
         strip = strip.child(button(
             "tab-pin",
             "icons/pin.svg",
+            "置顶",
             pinned,
             Box::new(|cx| {
                 let next = !crate::popup::is_pinned(cx);
@@ -845,6 +877,7 @@ fn tab_strip(
         strip = strip.child(button(
             "tab-theme",
             "icons/theme.svg",
+            "明暗",
             dark,
             Box::new(|cx| {
                 crate::settings::update(cx, |settings| {
@@ -863,6 +896,7 @@ fn tab_strip(
         strip = strip.child(button(
             "tab-favorite",
             "icons/star.svg",
+            "收藏",
             showing_favorites,
             Box::new({
                 let state = state.clone();
@@ -885,6 +919,7 @@ fn tab_strip(
         strip = strip.child(button(
             "tab-settings",
             "icons/gear.svg",
+            "设置",
             false,
             Box::new(|cx| {
                 crate::popup::close_all(cx);

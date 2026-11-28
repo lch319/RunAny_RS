@@ -2097,6 +2097,9 @@ fn place(
     if let Some(hwnd) = slot.hwnd {
         win32::set_rounded_corners(hwnd, scale);
     }
+    // 子菜单刚露脸会顶到最前，把右键小窗盖住（它俩都是 TOPMOST，谁后抬谁在上）。
+    // 这里把右键小窗重新抬一次，保持「右键菜单永远在最上层」。
+    crate::quick_menu::raise_if_open();
     slot.x = x;
     slot.y = y;
     slot.on_screen = true;
