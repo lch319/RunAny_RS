@@ -2884,6 +2884,29 @@ mod imp {
         }
     }
 
+    /// 直接销毁一扇窗口（`remove_window` 失败时的兜底，免得留下关不掉的窗口）。
+    pub fn destroy_window(hwnd: isize) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::DestroyWindow;
+        if hwnd == 0 {
+            return;
+        }
+        unsafe {
+            DestroyWindow(hwnd as HWND);
+        }
+    }
+
+    /// 从 gpui 的窗口直接拿原生 HWND（比「枚举前后差集」可靠得多）。
+    pub fn hwnd_of(window: &gpui::Window) -> Option<isize> {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        let Ok(handle) = HasWindowHandle::window_handle(window) else {
+            return None;
+        };
+        match handle.as_raw() {
+            RawWindowHandle::Win32(win32) => Some(win32.hwnd.get()),
+            _ => None,
+        }
+    }
+
     /// 取消 `window` 上正在进行的输入法组字（gpui 窗口 → 原生 HWND → 上面那个）。
     pub fn cancel_ime_composition_in(window: &gpui::Window) {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -4296,7 +4319,7 @@ pub use imp::{
     watch_foreground, window_process_id,
     process_name_of_window, input_context, preview_context, context_of_window,
     foreground_process_name, window_at_cursor, selection_target,
-    caps_lock_on, window_rect_exact, client_origin, cursor_over_hwnd, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
+    caps_lock_on, window_rect_exact, client_origin, cursor_over_hwnd, hwnd_of, destroy_window, move_resize_window, monitor_count, monitor_work_area, kill_process, find_window,
     process_path_of_window,
     sibling_processes, open_file_location, open_folder, open_url, enable_window, set_no_activate,
     system_uptime_ms, is_elevated, target_is_elevated, kill_other_instances, http_get,

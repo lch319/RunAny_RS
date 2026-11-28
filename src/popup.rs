@@ -795,7 +795,8 @@ fn spawn_key_script(cx: &mut App) {
 pub fn finish(id: SharedString, label: SharedString, actions: Vec<ActionStep>, cx: &mut App) {
     // 右键菜单里那几条不是普通动作：id 前缀认出来交给专门的处理器
     if let Some(rest) = id.strip_prefix("__ctx:") {
-        close_all(cx);
+        // **只**执行那条命令，不要把主菜单（置顶的那个）一起关掉
+        crate::quick_menu::close(cx);
         run_context_action(rest, cx);
         return;
     }

@@ -135,30 +135,37 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
 
     // 点自己外面就关：这个窗口不抢前台，所以只能靠「鼠标点了几次 + 光标在哪」判断
     let task = cx.spawn(async move |cx| {
-        // 圆角裁剪区域：这里再补一次（按客户区尺寸认出自己那扇窗，
-        // 开窗那一刻拿到的句柄有时还没量出尺寸，设了也不生效）
-        let want = (width as i32, height as i32);
+        // 先等这一下点击过去（右键那一刻的 click_tick 变化不能被当成「点走了」）
+        cx.background_executor()
+            .timer(std::time::Duration::from_millis(220))
+            .await;
+        // 现在窗口肯定已经画过一帧了：render 里会把 HWND 填进来
         let mut mine = HWND.with(|slot| slot.get());
         if mine == 0 {
-            // 按客户区尺寸认出自己那扇窗（开窗那一刻的差集有时是空的）
+            let want = ((width * scale).round() as i32, (height * scale).round() as i32);
             mine = crate::win32::zed_window_handles()
                 .into_iter()
-                .find(|hwnd| crate::win32::client_size(*hwnd) == Some(want))
+                .find(|hwnd| {
+                    crate::win32::client_size(*hwnd).is_some_and(|(w, h)| {
+                        (w - want.0).abs() <= 3 && (h - want.1).abs() <= 3
+                    })
+                })
                 .unwrap_or(0);
             if mine != 0 {
                 HWND.with(|slot| slot.set(mine));
             }
         }
-        if mine != 0 {
+        if mine == 0 {
+            // 认不出自己那扇窗就没法判断「点外面」——留着只会变成关不掉的幽灵窗
+            eprintln!("[quick] 认不出自己的窗口，直接关掉");
+            let _ = cx.update(|cx| close(cx));
+            return;
+        }
+        {
             crate::win32::set_rounded_corners(mine, scale);
             let _ = crate::win32::set_topmost(mine, "on");
             crate::win32::bring_to_front(mine);
         }
-        // 先把基线等稳：右键那一下的点击计数会在这几十毫秒里变，
-        // 立刻开始判「点外面」就会把它当成用户点走了（表现为「一闪就关」）
-        cx.background_executor()
-            .timer(std::time::Duration::from_millis(220))
-            .await;
         let mut clicks = crate::win32::click_tick();
         loop {
             cx.background_executor()
@@ -188,8 +195,19 @@ pub fn open(entries: Vec<MenuEntry>, cx: &mut App) {
 /// 关掉（如果开着）。
 pub fn close(cx: &mut App) {
     let handle = WINDOW.with(|slot| slot.replace(None));
+    let hwnd = HWND.with(|slot| slot.replace(0));
     if let Some(handle) = handle {
-        let _ = handle.update(cx, |_view, window, _cx| window.remove_window());
+        let removed = handle
+            .update(cx, |_view, window, _cx| window.remove_window())
+            .is_ok();
+        if removed {
+            return;
+        }
+    }
+    // gpui 那边已经拉不动了（句柄过期/窗口被别的路径建过）：直接按 HWND 销毁，
+    // 否则就留下一个「怎么点都关不掉」的窗口（用户报的就是这个）
+    if hwnd != 0 {
+        crate::win32::destroy_window(hwnd);
     }
 }
 
@@ -204,7 +222,20 @@ impl QuickMenu {
 }
 
 impl Render for QuickMenu {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // HWND 直接从窗口对象拿（稳定），顺便把圆角 / 置顶 / 前台一次做完
+        if let Some(hwnd) = crate::win32::hwnd_of(window) {
+            if HWND.with(|slot| slot.get()) != hwnd {
+                HWND.with(|slot| slot.set(hwnd));
+                let scale = window.scale_factor();
+                crate::win32::set_rounded_corners(hwnd, scale);
+                if crate::settings::read(|settings| settings.menu_no_focus) {
+                    crate::win32::set_no_activate(hwnd, true);
+                }
+                let _ = crate::win32::set_topmost(hwnd, "on");
+                crate::win32::bring_to_front(hwnd);
+            }
+        }
         let items = ENTRIES.with(|slot| slot.borrow().clone());
         let (width, height) = SIZE.with(|slot| slot.get());
         let mut list = div()
